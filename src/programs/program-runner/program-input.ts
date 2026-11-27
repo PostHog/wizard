@@ -9,7 +9,7 @@ import type {
 } from './credentials';
 import type { ProgramConfig, ProgramId } from '@programs/program-contract';
 import type {
-  PlanOffer,
+  ProjectSelection,
   ProjectDiscoveryMode,
 } from '@services/project-discovery';
 import type { SessionStore } from '@services/session';
@@ -41,14 +41,14 @@ export type ProgramStep =
       installDir: string;
       readiness: WizardReadinessResult;
     }
-  // Several projects are offered: `pick` names the one the run works in. `rank`, when set, waits for the model sources and returns the plan with their answers.
+  // Several projects are eligible: `selectProject` names the one the run works in. `rankProjects`, when set, waits for the model sources and returns the selection with their answers.
   | {
-      kind: 'plan';
+      kind: 'project-selection';
       programId: ProgramId;
       installDir: string;
-      plan: PlanOffer;
-      rank?: () => Promise<PlanOffer>;
-      pick: (projectPath: string) => void;
+      projectSelection: ProjectSelection;
+      rankProjects?: () => Promise<ProjectSelection>;
+      selectProject: (projectPath: string) => void;
     }
   // A Claude settings file redirects the agent and can't be neutralized; `fix` backs it up and removes it.
   | {

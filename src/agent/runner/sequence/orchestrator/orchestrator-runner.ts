@@ -32,7 +32,7 @@ import {
   scanInstalledSkill,
   scanInstalledSkillFile,
 } from '../../../yara-hooks';
-import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import { fetchSkillMenu } from '@shared/skill-menu';
 import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
@@ -55,6 +55,10 @@ import type {
   SequenceContext,
 } from '../../shared/types';
 import { runMatchKeys } from '../../shared/match-keys';
+import {
+  hasNonFrameworkMatchKeys,
+  installTraitSkills,
+} from '../../shared/trait-skills';
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
@@ -240,15 +244,6 @@ function cancelledRun(): SequenceResult {
     outcome: RunOutcome.Aborted,
     failure: { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
   };
-}
-
-/** Every skill entry the menu knows, across categories. */
-async function fetchSkillMenuEntries(
-  skillsBaseUrl: string,
-): Promise<SkillEntry[]> {
-  const menu = await fetchSkillMenu(skillsBaseUrl);
-  if (!menu) return [];
-  return Object.values(menu.categories).flat();
 }
 
 /**
@@ -892,8 +887,9 @@ async function executeOrchestrator(
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
-  const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
+  const menu = await fetchSkillMenu(boot.skillsBaseUrl);
   if (signal?.aborted) return cancelledRun();
+  const menuSkillEntries = menu ? Object.values(menu.categories).flat() : [];
   // The project's traits are the match keys; their framework is the one the pack resolves for.
   const matchKeys = runMatchKeys(config);
   const framework = matchKeys[FRAMEWORK_KEY]?.[0];
@@ -939,6 +935,19 @@ async function executeOrchestrator(
     logToFile(
       `[orchestrator] no integration skill for framework "${framework}"`,
     );
+  }
+
+  let sdkSkillPaths: string[] = [];
+  if (hasNonFrameworkMatchKeys(matchKeys)) {
+    const traitInstall = await installTraitSkills({
+      entries: menuSkillEntries,
+      matchKeys,
+      installDir: input.installDir,
+      triageProvider: boot.triageProvider,
+      signal,
+    });
+    if (traitInstall.aborted) return cancelledRun();
+    sdkSkillPaths = traitInstall.paths;
   }
 
   // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
@@ -1009,6 +1018,7 @@ async function executeOrchestrator(
     host: boot.credentials.host,
     examplePath,
     commandmentsPath,
+    sdkSkillPaths,
     facts: config.projectFacts?.() ?? [],
     accountOwner: config.accountOwnerContext
       ? accountOwnerFromEnv()

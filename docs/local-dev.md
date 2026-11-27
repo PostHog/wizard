@@ -232,7 +232,7 @@ nothing, runs no agent and changes no file. It works on any program command,
 with or without a terminal, in non-production builds such as `pnpm try`. It
 comes before every other mode: with `--ci` or `--playground` on the
 same command it still only prints and exits. It previews the run as asked, so
-`--ci` and `--project` change the plan it prints. It sends no discovery report
+`--ci` and `--project` change the project selection it prints. It sends no discovery report
 and no usage events; an error event can still be sent when something fails, as
 in any run.
 
@@ -240,6 +240,19 @@ in any run.
 pnpm try --test-discovery --install-dir=/absolute/path/to/app
 pnpm try error-tracking --test-discovery --install-dir=/absolute/path/to/app
 pnpm try --test-discovery=json --install-dir=/absolute/path/to/app
+```
+
+`--test-discovery-out <path>` saves the report to a file instead of printing it,
+and prints where it saved it. A relative path is from the directory the command
+ran in. A path that ends in `.json` saves the JSON report; any other path saves
+the text report, unless the mode is `json`. Repeat the option to save one run to
+more than one file. The save follows no link: it stops with a message when the
+file is a link, or when a folder on the way is a link below the repo or below
+the directory the command ran in.
+
+```bash
+pnpm try --test-discovery --test-discovery-out scratch/discovery.txt --install-dir=/absolute/path/to/app
+pnpm try --test-discovery --test-discovery-out scratch/discovery.txt --test-discovery-out scratch/discovery.json --install-dir=/absolute/path/to/app
 ```
 
 The report holds:
@@ -252,8 +265,8 @@ The report holds:
   uses, and the source that value came from. A source that said otherwise
   follows in brackets, and `(unsettled)` marks a trait whose sources disagree
 - the catalog tools found in each project
-- the plan the program would open after login: the projects offered, a reason
-  for each of the others, the one that starts picked, and whether the run would
+- the project selection the program would open after login: the eligible projects, an exclusion
+  reason for each of the others, the one that starts selected, and whether the run would
   ask. A program that picks no project, a CI run and a run with the flag off all
   ask nothing and work in the run project
 

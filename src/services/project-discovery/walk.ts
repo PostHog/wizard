@@ -1,7 +1,7 @@
 /**
  * The repo walk: the project facts discovery reads from disk, and the only
  * module in the service that reads the repo. One bounded walk for the file
- * tree, each manifest's package names, the lockfile names, the workspace
+ * tree, each manifest's package names and versions, the lockfile names, the workspace
  * markers and `.env` key NAMES. Never other file contents or `.env` values.
  */
 
@@ -42,6 +42,8 @@ export type DiscoveredManifest = {
   /** Package ecosystem: `npm`, `pypi`, `rubygems`, `cargo`, ... */
   ecosystem: string;
   packages: string[];
+  /** The version text the manifest declares, by package, for the packages that declare one. */
+  versions: Record<string, string>;
 };
 
 /** A workspace marker file the walk read. */
@@ -253,7 +255,12 @@ export function walkRepoFiles(
         path: file,
         dir: realPath(manifestDir(raw)),
         ecosystem: manifest.ecosystem,
-        packages: [...new Set(packages)],
+        packages: Object.keys(packages),
+        versions: Object.fromEntries(
+          Object.entries(packages).filter(
+            ([, version]) => typeof version === 'string' && version,
+          ),
+        ),
       });
     };
 

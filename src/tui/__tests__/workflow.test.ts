@@ -5,8 +5,8 @@ import { WizardReadiness } from '@shared/health-checks/readiness';
 import { RunOutcome } from '@programs';
 import { SOURCE_MAPS_CONTEXT_KEYS } from '@programs/error-tracking-upload-source-maps';
 import { WizardStore } from '../store';
-import type { PlanOffer } from '@programs/types';
-import { planOptions } from '../screens/PlanScreen';
+import type { ProjectSelection } from '@programs/types';
+import { pickerOptions } from '../screens/ProjectPickerScreen';
 import { tuiWorkflow } from '../workflow';
 
 const approvedUser = {
@@ -114,48 +114,51 @@ describe('tuiWorkflow', () => {
     expect(store.session.readinessResult).toBe(readiness);
   });
 
-  it('holds the plan step on the plan screen until the person picks, then holds the run behind it', async () => {
+  it('holds the project selection step on the project picker until the person picks, then holds the run behind it', async () => {
     const store = new WizardStore('posthog-integration');
     loggedIn(store);
-    const offer: PlanOffer = {
+    const projectSelection: ProjectSelection = {
       repoType: 'monorepo',
-      complete: true,
-      picked: 'apps/web',
+      isDiscoveryComplete: true,
+      selectedProjectPath: 'apps/web',
       projects: [
-        { path: 'apps/web', offered: true, mainApp: false },
-        { path: 'apps/api', offered: true, mainApp: false },
+        { path: 'apps/web', eligible: true, isMainApp: false },
+        { path: 'apps/api', eligible: true, isMainApp: false },
       ],
     };
-    const ranked: PlanOffer = { ...offer, picked: 'apps/api' };
-    const pick = vi.fn();
+    const ranked: ProjectSelection = {
+      ...projectSelection,
+      selectedProjectPath: 'apps/api',
+    };
+    const selectProject = vi.fn();
     const signal = new AbortController().signal;
     const host = tuiWorkflow(store, 'posthog-integration');
 
-    const plan = host.confirmStep(
+    const step = host.confirmStep(
       {
-        kind: 'plan',
+        kind: 'project-selection',
         programId: 'posthog-integration',
         installDir: '/repo',
-        plan: offer,
-        rank: () => Promise.resolve(ranked),
-        pick,
+        projectSelection,
+        rankProjects: () => Promise.resolve(ranked),
+        selectProject,
       },
       { signal },
     );
-    expect(await settles(plan)).toBe(false);
-    // The model sources answered: the screen shows their plan.
-    expect(store.plan).toEqual({
-      offer: ranked,
+    expect(await settles(step)).toBe(false);
+    // The model sources answered: the screen shows their selection.
+    expect(store.projectSelection).toEqual({
+      selection: ranked,
       ranking: false,
-      confirmed: null,
+      confirmedProjectPath: null,
     });
-    expect(store.currentScreen).toBe('plan');
+    expect(store.currentScreen).toBe('project-picker');
 
-    store.confirmPlan('apps/api');
-    expect(await plan).toBe(true);
-    expect(pick).toHaveBeenCalledWith('apps/api');
-    expect(planOptions(ranked.projects, ranked.picked)[0].value).toBe(
-      'apps/api',
-    );
+    store.confirmProjectPick('apps/api');
+    expect(await step).toBe(true);
+    expect(selectProject).toHaveBeenCalledWith('apps/api');
+    expect(
+      pickerOptions(ranked.projects, ranked.selectedProjectPath)[0].value,
+    ).toBe('apps/api');
   });
 });

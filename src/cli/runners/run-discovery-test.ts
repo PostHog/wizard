@@ -1,4 +1,6 @@
 /** Test discovery mode (`--test-discovery`): print what a run knows about the repo before login, then exit. */
+import fs from 'fs';
+import path from 'path';
 import type {
   DiscoveryTestProject,
   DiscoveryTestReport,
@@ -14,6 +16,75 @@ import { exitWith } from './signals';
 /** Whether the command line asked for test discovery mode. */
 export function wantsDiscoveryTest(options: Record<string, unknown>): boolean {
   return options.testDiscovery !== undefined;
+}
+
+/** The report's format: JSON when the mode asks for it, or when the file it is saved to is a `.json` one. */
+export function discoveryTestFormat(
+  mode: unknown,
+  file?: string,
+): 'json' | 'text' {
+  return mode === 'json' || file?.toLowerCase().endsWith('.json')
+    ? 'json'
+    : 'text';
+}
+
+/** The files to save the report to: `--test-discovery-out`, once or repeated. */
+export function discoveryTestFiles(options: Record<string, unknown>): string[] {
+  return [options.testDiscoveryOut]
+    .flat()
+    .filter((out): out is string => typeof out === 'string' && out !== '');
+}
+
+/** Opens a file for writing and refuses a link at its last part, where the platform can. */
+const WRITE_NO_FOLLOW =
+  fs.constants.O_WRONLY |
+  fs.constants.O_CREAT |
+  fs.constants.O_TRUNC |
+  (fs.constants.O_NOFOLLOW ?? 0);
+
+/** Refuses a path below `boundary` that passes through a link there: a repo's files can hold a link to anywhere on the machine. */
+function refuseLinksBelow(boundary: string, file: string): void {
+  const base = path.resolve(boundary);
+  const below = path.relative(base, file).split(path.sep);
+  // Elsewhere on the machine, or on another drive: not this boundary's to check.
+  if (below[0] === '..' || path.isAbsolute(below.join(path.sep))) return;
+  let current = base;
+  // The folders on the way; the last part is checked where the file is opened.
+  for (const part of below.slice(0, -1)) {
+    current = path.join(current, part);
+    const found = fs.lstatSync(current, { throwIfNoEntry: false });
+    if (found && !found.isDirectory()) {
+      throw new Error(
+        `--test-discovery-out: ${current} is a link or not a folder, so the report was not saved to ${file}.`,
+      );
+    }
+  }
+}
+
+/**
+ * Save the report to `file`. Its last part is a plain file or a new one, and
+ * below each of `boundaries` it passes through no link, so a link in a repo
+ * cannot send the write to another file.
+ */
+export function saveDiscoveryReport(
+  file: string,
+  text: string,
+  boundaries: readonly string[],
+): void {
+  for (const boundary of boundaries) refuseLinksBelow(boundary, file);
+  const found = fs.lstatSync(file, { throwIfNoEntry: false });
+  if (found && !found.isFile()) {
+    throw new Error(
+      `--test-discovery-out: ${file} is a link or not a plain file, so the report was not saved.`,
+    );
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const fd = fs.openSync(file, WRITE_NO_FOLLOW, 0o666);
+  try {
+    fs.writeSync(fd, text);
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 const pad = (label: string, width = 18): string => label.padEnd(width);
@@ -123,9 +194,9 @@ function decisionLines(decisions: DiscoveryTestReport['decisions']): string[] {
   ];
 }
 
-/** The report as text: the repo, each project's traits with their sources, and the plan. */
+/** The report as text: the repo, each project's traits with their sources, and the project selection. */
 export function formatDiscoveryTest(report: DiscoveryTestReport): string {
-  const { walk, detection, plan } = report;
+  const { walk, detection, projectSelection } = report;
   const lines = [
     `Project discovery, test mode: ${report.program}`,
     '',
@@ -158,21 +229,24 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
     ...report.projects.flatMap(projectLines),
     ...decisionLines(report.decisions),
     '',
-    `Plan for ${report.program}: ${
+    `Project selection for ${report.program}: ${
       report.mode === 'off'
         ? `not used while the flag is off; the run works in ${clean(
-            plan.picked,
+            projectSelection.selectedProjectPath,
           )}`
-        : `${plan.asks ? 'asks after login' : 'asks nothing'}, picks ${clean(
-            plan.picked,
-          )}`
+        : `${
+            projectSelection.asks ? 'asks after login' : 'asks nothing'
+          }, picks ${clean(projectSelection.selectedProjectPath)}`
     }`,
-    ...plan.projects.map((project) => {
-      const mark = project.path === plan.picked ? '*' : ' ';
+    ...projectSelection.projects.map((project) => {
+      const mark =
+        project.path === projectSelection.selectedProjectPath ? '*' : ' ';
       const detail = [
         project.frameworkName,
-        project.mainApp ? 'main app' : undefined,
-        project.offered ? undefined : `not offered: ${project.reason ?? ''}`,
+        project.isMainApp ? 'main app' : undefined,
+        project.eligible
+          ? undefined
+          : `not eligible: ${project.exclusionReason ?? ''}`,
       ].filter((part): part is string => part !== undefined);
       return `  ${mark} ${pad(clean(project.path), 24)} ${detail.join(', ')}`;
     }),
@@ -183,7 +257,8 @@ export function formatDiscoveryTest(report: DiscoveryTestReport): string {
 
 /**
  * Run discovery and the program's own detection with no login and no agent,
- * print the report as text or JSON, and exit. Nothing is set up.
+ * print the report as text or JSON, or save it to a file, and exit. Nothing is
+ * set up.
  */
 export function runDiscoveryTest(
   config: ProgramConfig,
@@ -205,11 +280,29 @@ export function runDiscoveryTest(
       project,
       gateway,
     );
-    const text =
-      options.testDiscovery === 'json'
+    const render = (file?: string): string =>
+      discoveryTestFormat(options.testDiscovery, file) === 'json'
         ? JSON.stringify(report, null, 2)
         : formatDiscoveryTest(report);
-    process.stdout.write(`${text}\n`);
+    const files = discoveryTestFiles(options);
+    for (const out of files) {
+      // A relative path is from the directory the command ran in.
+      const file = path.resolve(out);
+      try {
+        // The repo and that directory are where a link could come from a checkout.
+        saveDiscoveryReport(file, `${render(file)}\n`, [
+          process.cwd(),
+          report.rootDir,
+        ]);
+      } catch (error) {
+        // A refused or failed save is the caller's to fix, not an internal error.
+        const message = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`${clean(message)}\n`);
+        return 1;
+      }
+      process.stdout.write(`Saved the report to ${clean(file)}\n`);
+    }
+    if (files.length === 0) process.stdout.write(`${render()}\n`);
     return 0;
   });
 }

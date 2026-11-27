@@ -8,7 +8,7 @@ export type MatchKeys = Readonly<Record<string, readonly string[] | undefined>>;
 /** The tag that breaks a ranking tie. */
 export const DEFAULT_SKILL_TAG = 'default';
 
-/** The match key every family pick requires. */
+/** Match key required for framework family picks (skipped when resolving non-framework trait skills). */
 export const FRAMEWORK_KEY = 'framework';
 
 /** An entry's tags. */
@@ -28,6 +28,20 @@ function matchKeysOf(tags: ReadonlySet<string>): Map<string, string[]> {
   return keys;
 }
 
+/** Whether a family matches on keys other than the framework, such as an SDK's major: one of its skills declares a key, and none the framework. */
+function isTraitFamily(
+  entries: readonly SkillEntry[],
+  family: string,
+): boolean {
+  const declared = entries
+    .filter((entry) => entry.family === family)
+    .map((entry) => matchKeysOf(skillTags(entry)));
+  return (
+    declared.some((keys) => keys.size > 0) &&
+    !declared.some((keys) => keys.has(FRAMEWORK_KEY))
+  );
+}
+
 /** The skill `name` stands for, a menu id or a skill family, or undefined when none fits the run's match keys. */
 export function resolveSkill(
   entries: readonly SkillEntry[],
@@ -36,7 +50,8 @@ export function resolveSkill(
 ): SkillEntry | undefined {
   const exact = entries.find((entry) => entry.id === name);
   if (exact) return exact;
-  if (!keys[FRAMEWORK_KEY]?.length) return undefined;
+  const byFramework = !isTraitFamily(entries, name);
+  if (byFramework && !keys[FRAMEWORK_KEY]?.length) return undefined;
 
   let best: SkillEntry | undefined;
   let bestScore = -1;
@@ -44,7 +59,7 @@ export function resolveSkill(
     if (entry.family !== name) continue;
     const tags = skillTags(entry);
     const declared = matchKeysOf(tags);
-    if (!declared.has(FRAMEWORK_KEY)) continue;
+    if (byFramework && !declared.has(FRAMEWORK_KEY)) continue;
 
     let agreeing = 0;
     let disagrees = false;
@@ -63,4 +78,23 @@ export function resolveSkill(
     }
   }
   return best;
+}
+
+/** One skill per trait family the run has a value for, such as the SDK skill for the installed major. */
+export function resolveTraitSkills(
+  entries: readonly SkillEntry[],
+  keys: MatchKeys,
+): SkillEntry[] {
+  const hasValue = (key: string) =>
+    Object.hasOwn(keys, key) && Boolean(keys[key]?.length);
+  const families = new Set(
+    entries
+      .filter((entry) =>
+        [...matchKeysOf(skillTags(entry)).keys()].some(hasValue),
+      )
+      .flatMap((entry) => entry.family ?? []),
+  );
+  return [...families]
+    .filter((family) => isTraitFamily(entries, family))
+    .flatMap((family) => resolveSkill(entries, family, keys) ?? []);
 }

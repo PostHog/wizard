@@ -139,6 +139,13 @@ export type RankSource = 'decisions' | 'agentic';
 /** A program's `id`. */
 export type ProgramId = string;
 
+/** A product whose lowest supported PostHog SDK version the wizard checks before a run. */
+export type SdkFeature =
+  | 'errorTracking'
+  | 'releaseLinking'
+  | 'mcpAnalytics'
+  | 'aiObservability';
+
 /**
  * Uniform configuration for a wizard program.
  *
@@ -336,6 +343,8 @@ export interface ProgramConfig {
    * the run fails with `unavailableMessage` before any agent starts.
    */
   rolloutGate?: { flagKey: string; unavailableMessage: string };
+  /** The product this program sets up. The run fails before any agent starts when the project's PostHog SDK is below its minimum. */
+  sdkFeature?: SdkFeature;
   /** The run creates no event definitions, so login doesn't require `event_definition:write`. */
   completionScopeOptional?: boolean;
 }

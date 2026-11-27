@@ -4,24 +4,33 @@ import { cleanup, render } from 'ink-testing-library';
 vi.mock('ink', () => vi.importActual<typeof import('ink')>('ink-actual'));
 vi.mock(import('@programs'), async (original) => ({
   ...(await original()),
-  buildPlan: vi.fn(),
+  buildProjectSelection: vi.fn(),
   pickLeavesRunProject: vi.fn(),
 }));
 
-import { buildPlan, buildSession, pickLeavesRunProject } from '@programs';
+import {
+  buildProjectSelection,
+  buildSession,
+  pickLeavesRunProject,
+} from '@programs';
 import { config as posthogIntegration } from '@programs/posthog-integration';
-import type { PlanOffer } from '@programs/types';
+import type { ProjectSelection } from '@programs/types';
 import { WizardStore } from '@tui/store';
 import { PostHogIntegrationIntroScreen } from '../PostHogIntegrationIntroScreen';
 
-const PLAN: PlanOffer = {
+const PLAN: ProjectSelection = {
   repoType: 'monorepo',
-  picked: '.',
-  complete: true,
+  selectedProjectPath: '.',
+  isDiscoveryComplete: true,
   projects: [
-    { path: '.', offered: false, reason: 'workspace-root', mainApp: false },
-    { path: 'apps/web', offered: true, mainApp: false },
-    { path: 'apps/admin', offered: true, mainApp: false },
+    {
+      path: '.',
+      eligible: false,
+      exclusionReason: 'workspace-root',
+      isMainApp: false,
+    },
+    { path: 'apps/web', eligible: true, isMainApp: false },
+    { path: 'apps/admin', eligible: true, isMainApp: false },
   ],
 };
 
@@ -29,7 +38,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 60));
 
 /** The intro once detection found no framework in the launch directory. */
 async function frameworklessIntro(leaves: boolean): Promise<string> {
-  vi.mocked(buildPlan).mockReturnValue(PLAN);
+  vi.mocked(buildProjectSelection).mockReturnValue(PLAN);
   vi.mocked(pickLeavesRunProject).mockReturnValue(leaves);
   const store = new WizardStore(posthogIntegration.id);
   store.launch(buildSession({ installDir: '/tmp/workspace' }));

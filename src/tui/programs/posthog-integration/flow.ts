@@ -45,11 +45,11 @@ export const POSTHOG_INTEGRATION_FLOW: FlowStep[] = [
   },
   {
     // Shown once the run offers several projects; a run with one never opens it.
-    id: 'plan',
+    id: 'project-selection',
     label: 'Project',
-    screenId: 'plan',
-    show: (tui) => tui.plan !== null,
-    isComplete: (tui) => tui.plan?.confirmed != null,
+    screenId: 'project-picker',
+    show: (tui) => tui.projectSelection !== null,
+    isComplete: (tui) => tui.projectSelection?.confirmedProjectPath != null,
   },
   {
     id: 'run',

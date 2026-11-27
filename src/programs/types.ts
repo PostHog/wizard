@@ -40,9 +40,9 @@ export type {
 export type { PlannedEvent, SessionLogin, TaskItem } from '@services/session';
 export type { DetectedSource } from '@services/warehouse-sources';
 export type {
-  PlanOffer,
-  PlanProject,
-  PlanReason,
+  ProjectSelection,
+  ProjectOption,
+  ProjectExclusionReason,
 } from '@services/project-discovery';
 export type { TaskStreamOutcome } from '@services/session';
 export type { TaskStreamPushOptions } from '@services/session';

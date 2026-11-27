@@ -1,8 +1,10 @@
-/** Extract gem names from `gem 'name'` declarations. */
-export function parseGemfile(content: string): string[] {
-  const gems: string[] = [];
-  for (const match of content.matchAll(/^\s*gem\s+['"]([^'"]+)['"]/gm)) {
-    gems.push(match[1]);
-  }
-  return gems;
+/** Gem versions from `gem 'name'` declarations, by gem. */
+export function parseGemfile(content: string): Record<string, string> {
+  return Object.fromEntries(
+    [
+      ...content.matchAll(
+        /^\s*gem\s+['"]([^'"]+)['"](?:\s*,\s*['"]([^'"]+)['"])?/gm,
+      ),
+    ].map((m) => [m[1], m[2] ?? '']),
+  );
 }

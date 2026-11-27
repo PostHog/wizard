@@ -148,33 +148,38 @@ is that directory, so it reads that directory's traits.
 
 With `wizard-project-discovery` on, a program with `appliesTo` picks its project
 after login. The mode is the one discovery ran in, `Discovery.mode`, so
-discovery and the picker always agree. `runProgram` builds the plan, and when
-more than one project is offered it asks the host through the `plan` workflow
-step. The TUI shows the plan screen in the default flow; the picked project
-comes first, so Enter keeps the default. A headless or `--ci` run asks nobody:
-it takes `--project <path>`, which is a path from the workspace root in every
-mode, else the ranking's pick, else the default. A program's
-`rankWith: ['agentic']` runs agentic detection where there is a choice to make,
-so the main app is marked. A pick other than the run project points the session
-at it and runs the program's detection again there. When the flag answers
+discovery and the picker always agree. `runProgram` builds the project selection,
+and when more than one project is eligible in a monorepo it asks the host through
+the `project-selection` workflow step. A repo is a monorepo when static discovery finds a
+workspace, when a model source calls it one, or when a model source names a main
+app other than the run project. The TUI shows the project picker in the default
+flow; the selected project comes first, so Enter keeps the default. A headless or
+`--ci` run asks nobody: it takes `--project <path>`, which is a path from the
+workspace root in every mode, else the ranking's pick, else the default. A
+program's `rankWith: ['agentic']` runs agentic detection where there is a choice
+to make, so the main app is marked. A CI run also runs it where several projects
+are eligible and no model source has ranked them, and a run at the root then
+takes the main app it names. With no workspace marker, the run directory is that
+root. A pick other than the run project points the session at
+it and runs the program's detection again there. When the flag answers
 differently after login, the program's detection also runs again under the new
 mode, before any agent runs.
 
 The project the run started in can be one the program cannot run in, such as a
-workspace root with no framework of its own. While the plan offers another
+workspace root with no framework of its own. While the selection offers another
 project, what stops the run there waits for the pick: a failed detection, an
 unmet prerequisite or a run that does not resolve. A run that moves resolves in
 the picked project. A run that stays ends with the failure it had.
 
-A host that shows the plan can read `pickLeavesRunProject` before login: the
-plan does not offer the project the run started in, and it asks for a pick or
+A host that shows the selection can read `pickLeavesRunProject` before login: the
+selection does not offer the project the run started in, and it asks for a pick or
 its default is another project. The TUI's integration intro then asks for no
 framework and shows the projects found in place of that project's detection. The
 TUI passes the mode it showed as `input.discoveryMode`, and the run keeps that
 mode through login.
 
 The older CI auto-picker, `scopeInstallDirToProject`, stands down for a program
-whose plan picks its project and when the caller named a project. Every other
+that picks its own project and when the caller named a project. Every other
 program keeps it with discovery on.
 
 A program's `appliesTo(traits)` says which projects it applies to, over one
