@@ -7,7 +7,7 @@ const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';
 
 function buildAioPrompt(preinstalledSkillId?: string): string {
   const skillStep = preinstalledSkillId
-    ? `Skill \`${preinstalledSkillId}\` was pre-installed for you at the skill path above. Read its \`SKILL.md\` and references directly — skip \`load_skill_menu\` and \`install_skill\` unless inspecting the code shows a different variant (such as a gateway \`baseURL\` override or a framework wrapping the calls) applies.`
+    ? `Skill \`${preinstalledSkillId}\` was pre-installed for you at the skill path below. Read its \`SKILL.md\` and references directly — skip \`load_skill_menu\` and \`install_skill\` unless inspecting the code shows a different variant (such as a gateway \`baseURL\` override or a framework wrapping the calls) applies.`
     : `This flow has no pre-installed skill — you install the right one yourself:
 
 1. Call \`load_skill_menu\` with \`category: "ai-observability"\`. The menu is
@@ -66,8 +66,9 @@ export const config: ProgramConfig = {
     const skillId = detectUnambiguousAioSkill(session.installDir);
     return Promise.resolve({
       integrationLabel: 'ai-observability',
-      ...(skillId && { skillId }),
-      customPrompt: () => buildAioPrompt(skillId),
+      ...(skillId && { skillId, optionalSkill: true }),
+      customPrompt: (ctx) =>
+        buildAioPrompt(ctx.skillPath ? skillId : undefined),
       successMessage: `AI Observability configured! View the report at ./${AI_OBSERVABILITY_REPORT_FILE}`,
       reportFile: AI_OBSERVABILITY_REPORT_FILE,
       docsUrl: 'https://posthog.com/docs/ai-observability',

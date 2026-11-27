@@ -10,10 +10,14 @@
  * to `load_skill_menu` + `install_skill` at runtime.
  */
 
-import { existsSync, readdirSync, statSync } from 'fs';
+import { existsSync } from 'fs';
 import { extname, join } from 'path';
-import { readProjectFile } from '@utils/bounded-fs';
+import { readProjectFile, walkProjectFiles } from '@utils/bounded-fs';
 import { parsePackageJson } from '@utils/package-json';
+import {
+  parsePyprojectToml,
+  parseRequirementsTxt,
+} from '@services/project-discovery';
 
 const NODE_FRAMEWORK_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ['@openai/agents', 'ai-observability-openai-agents'],
@@ -72,50 +76,27 @@ const PYTHON_PROVIDER_SKILLS: ReadonlyArray<readonly [string, string]> = [
 const GATEWAY_OVERRIDE_RE =
   /\b(OPENAI_BASE_URL|baseURL|base_url)\b|api\.groq\.com|openrouter\.ai|api\.together\.xyz|localhost:11434/;
 const CODE_EXTS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.py']);
-const SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  '.next',
-  '.venv',
-  'venv',
-  '__pycache__',
-  '.posthog-wizard-cache',
-]);
-const MAX_SCAN_FILES = 40;
+export const MAX_GATEWAY_SCAN_FILES = 200;
+const GATEWAY_SCAN_DEPTH = 5;
 
-function normalizePyName(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/[-_.]+/g, '-');
-}
-
-function parsePyDeps(installDir: string): Map<string, string> {
-  const deps = new Map<string, string>();
-  const addLine = (raw: string) => {
-    const clean = raw.split('#')[0]?.trim() ?? '';
-    if (!clean || clean.startsWith('-')) return;
-    const m = /^([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(.*)$/.exec(clean);
-    if (m) deps.set(normalizePyName(m[1]), m[2].trim());
+function parsePyDeps(installDir: string): Map<string, string[]> {
+  const deps = new Map<string, string[]>();
+  const record = (parsed: Record<string, string>) => {
+    for (const [name, spec] of Object.entries(parsed)) {
+      const existing = deps.get(name);
+      if (existing) {
+        existing.push(spec);
+      } else {
+        deps.set(name, [spec]);
+      }
+    }
   };
 
   const req = readProjectFile(join(installDir, 'requirements.txt'));
-  if (req) {
-    for (const line of req.split('\n')) addLine(line);
-  }
+  if (req) record(parseRequirementsTxt(req));
 
   const pyproject = readProjectFile(join(installDir, 'pyproject.toml'));
-  if (pyproject) {
-    const depMatches = pyproject.matchAll(
-      /["']([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?([^"']*)["']/g,
-    );
-    for (const m of depMatches) {
-      const norm = normalizePyName(m[1]);
-      if (!deps.has(norm)) deps.set(norm, (m[2] ?? '').trim());
-    }
-  }
+  if (pyproject) record(parsePyprojectToml(pyproject));
 
   return deps;
 }
@@ -126,38 +107,38 @@ function isPreOneOpenAi(spec: string | undefined): boolean {
   return m !== null && Number(m[1]) === 0;
 }
 
-function hasGatewayOverrideInSource(installDir: string): boolean {
+/**
+ * Returns true if any scanned source file configures a custom gateway/baseURL
+ * override OR if the project exceeds the bounded scan cap (conservative fallback).
+ */
+function mayHaveGatewayOverride(
+  installDir: string,
+  maxScanFiles = MAX_GATEWAY_SCAN_FILES,
+): boolean {
   let scanned = 0;
-  const stack = [installDir];
-  while (stack.length > 0 && scanned < MAX_SCAN_FILES) {
-    const dir = stack.pop();
-    if (!dir) continue;
-    let entries: string[];
-    try {
-      entries = readdirSync(dir);
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (scanned >= MAX_SCAN_FILES) break;
-      if (SKIP_DIRS.has(entry) || entry.startsWith('.')) continue;
-      const full = join(dir, entry);
-      let st;
-      try {
-        st = statSync(full);
-      } catch {
-        continue;
+  let found = false;
+  let capped = false;
+
+  const complete = walkProjectFiles(
+    installDir,
+    (name, fullPath) => {
+      if (found || capped) return;
+      if (!CODE_EXTS.has(extname(name))) return;
+      scanned += 1;
+      if (scanned > maxScanFiles) {
+        capped = true;
+        return;
       }
-      if (st.isDirectory()) {
-        stack.push(full);
-      } else if (st.isFile() && CODE_EXTS.has(extname(entry))) {
-        scanned += 1;
-        const content = readProjectFile(full);
-        if (content && GATEWAY_OVERRIDE_RE.test(content)) return true;
+      const content = readProjectFile(fullPath);
+      if (content && GATEWAY_OVERRIDE_RE.test(content)) {
+        found = true;
       }
-    }
-  }
-  return false;
+    },
+    GATEWAY_SCAN_DEPTH,
+    { followSymlinks: false },
+  );
+
+  return found || capped || !complete;
 }
 
 function uniqueMatches(
@@ -177,6 +158,7 @@ function uniqueMatches(
  */
 export function detectUnambiguousAioSkill(
   installDir: string,
+  opts?: { maxScanFiles?: number },
 ): string | undefined {
   // Go projects or workspaces can house LLM calls in sub-packages or require Go >= 1.25 checks.
   if (
@@ -216,33 +198,55 @@ export function detectUnambiguousAioSkill(
   if (hasNode && hasPy) return undefined;
   if (!hasNode && !hasPy) return undefined;
 
+  const maxScanFiles = opts?.maxScanFiles ?? MAX_GATEWAY_SCAN_FILES;
+
   if (hasNode) {
     if (nodeFrameworks.length > 1) return undefined;
     if (nodeFrameworks.length === 1) {
-      // Framework wins over underlying provider unless another provider suggests side-path usage.
+      // Framework wins over one underlying provider, but multiple providers,
+      // pre-1.0 OpenAI, or gateway overrides fall back to runtime discovery.
+      if (
+        nodeProviders.length > 1 ||
+        (nodeProviders.includes('ai-observability-openai-node') &&
+          isPreOneOpenAi(nodeDeps.get('openai'))) ||
+        mayHaveGatewayOverride(installDir, maxScanFiles)
+      ) {
+        return undefined;
+      }
       return nodeFrameworks[0];
     }
     if (nodeProviders.length !== 1) return undefined;
     const only = nodeProviders[0];
-    if (only === 'ai-observability-openai-node') {
-      if (
-        isPreOneOpenAi(nodeDeps.get('openai')) ||
-        hasGatewayOverrideInSource(installDir)
-      ) {
-        return undefined;
-      }
+    if (
+      only === 'ai-observability-openai-node' &&
+      (isPreOneOpenAi(nodeDeps.get('openai')) ||
+        mayHaveGatewayOverride(installDir, maxScanFiles))
+    ) {
+      return undefined;
     }
     return only;
   }
 
   if (pyFrameworks.length > 1) return undefined;
-  if (pyFrameworks.length === 1) return pyFrameworks[0];
+  if (pyFrameworks.length === 1) {
+    const pyOpenAiSpecs = pyDeps.get('openai') ?? [];
+    if (
+      pyProviders.length > 1 ||
+      (pyProviders.includes('ai-observability-openai-python') &&
+        pyOpenAiSpecs.some((spec) => isPreOneOpenAi(spec))) ||
+      mayHaveGatewayOverride(installDir, maxScanFiles)
+    ) {
+      return undefined;
+    }
+    return pyFrameworks[0];
+  }
   if (pyProviders.length !== 1) return undefined;
   const onlyPy = pyProviders[0];
   if (onlyPy === 'ai-observability-openai-python') {
+    const pyOpenAiSpecs = pyDeps.get('openai') ?? [];
     if (
-      isPreOneOpenAi(pyDeps.get('openai')) ||
-      hasGatewayOverrideInSource(installDir)
+      pyOpenAiSpecs.some((spec) => isPreOneOpenAi(spec)) ||
+      mayHaveGatewayOverride(installDir, maxScanFiles)
     ) {
       return undefined;
     }
