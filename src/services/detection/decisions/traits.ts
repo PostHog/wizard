@@ -1,10 +1,12 @@
 /** Decisions as a trait source: its answers written through the one setter, as source `decisions`. */
 
 import { logToFile } from '@utils/debug';
-import { applyDetectionReport } from '../../project-discovery/traits/adapter';
+import {
+  applyDetectionReport,
+  type ReportSink,
+} from '../../project-discovery/traits/adapter';
 import {
   setTraits,
-  type TraitSink,
   type TraitWrite,
 } from '../../project-discovery/traits/store';
 import { INTEGRATION_SCAN } from '../project-scope';
@@ -64,7 +66,7 @@ export function decisionTraitWrites(
  * project whose target is below {@link PROJECT_CONFIDENCE} writes nothing.
  */
 export async function rankProjectsWithDecisions(
-  sink: TraitSink,
+  sink: ReportSink,
   programId: string,
   fetchImpl?: typeof fetch,
 ): Promise<void> {
@@ -95,7 +97,7 @@ export async function rankProjectsWithDecisions(
 
 export type DecisionsSourceContext = RunDecisionsContext & {
   /** Where the answers land as traits. Without one they reach only the log. */
-  sink?: TraitSink;
+  sink?: ReportSink;
   /** False to ask the program's questions alone, for a project picked after the ranking. */
   rankProjects?: boolean;
 };

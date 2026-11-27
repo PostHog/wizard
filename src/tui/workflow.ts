@@ -21,13 +21,21 @@ export function tuiWorkflow(
         case 'settings-conflict':
           await store.showSettingsOverride(step.conflicts, step.fix);
           return true;
-        case 'plan': {
-          // The plan screen holds here until the person picks a project.
-          store.showPlan(step.plan, step.rank !== undefined);
-          if (step.rank) store.setPlanRanked(await step.rank());
-          await store.waitUntil((view) => view.plan?.confirmed != null);
-          const picked = store.plan?.confirmed;
-          if (picked) step.pick(picked);
+        case 'project-selection': {
+          // The project picker holds here until the person picks a project.
+          store.showProjectPicker(
+            step.projectSelection,
+            step.rankProjects !== undefined,
+          );
+          if (step.rankProjects) {
+            store.setProjectsRanked(await step.rankProjects());
+          }
+          await store.waitUntil(
+            (view) => view.projectSelection?.confirmedProjectPath != null,
+          );
+          const confirmedProjectPath =
+            store.projectSelection?.confirmedProjectPath;
+          if (confirmedProjectPath) step.selectProject(confirmedProjectPath);
           return true;
         }
         case 'run':

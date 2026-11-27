@@ -21,17 +21,18 @@ export {
   type ProjectDiscoveryMode,
 } from './flag';
 export {
-  buildPlan,
+  buildProjectSelection,
   pickLeavesRunProject,
   picksProject,
-  planAsks,
-  planNeedsPick,
+  askUserToSelectProject,
+  hasMultipleEligibleProjects,
+  shouldRankProjects,
   reportProjectsDiscovered,
   reportProjectsSelected,
-  type PlanOffer,
-  type PlanProject,
-  type PlanReason,
-} from './plan';
+  type ProjectSelection,
+  type ProjectOption,
+  type ProjectExclusionReason,
+} from './project-selection';
 export {
   discoverProjects,
   parentOf,
@@ -47,7 +48,8 @@ export { DISCOVERY_TAGS_KEY, maySendDiscovery, tagDiscovery } from './tags';
 export type { DetectedTool, DiscoveredTools } from './tools';
 export { applyDetectionReport, joinProjectPath } from './traits/adapter';
 export { toMatchKeys, toTraitKeys } from './traits/match-keys';
-export { TRAITS } from './traits/registry';
+export { TRAITS, VERSIONED_SDK_SKILLS_ENABLED_KEY } from './traits/registry';
+export { sdkFeatureGaps, type SdkFeatureGap } from './traits/sdk-features';
 export { selectProjects, type ProjectPredicate } from './traits/select';
 export {
   getProject,

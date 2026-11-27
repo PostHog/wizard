@@ -1,15 +1,16 @@
 /**
  * Agent prompt assembly.
  *
- * Three sections, always in this order:
- *   1. Default project prompt — credentials and base context (always included)
+ * Four sections, always in this order:
+ *   1. Default project prompt — credentials, base context, and detected facts (always included)
  *   2. Custom prompt — additional program-specific instructions (if set)
  *   3. Skill prompt — "follow SKILL.md" instructions (if a skill was installed)
+ *   4. SDK trait skill reference — declared SDK major SKILL.md paths (if SDK trait skills were installed)
  */
 
 import type { AgentRunDefinition } from './runner/shared/types';
 import type { HostResolution } from '@shared/host-resolution';
-import { detectedFacts } from './agent-prompt-loader';
+import { detectedFacts, sdkSkillReference } from './agent-prompt-loader';
 
 /**
  * Values available to prompt builders after OAuth completes.
@@ -20,6 +21,8 @@ export interface PromptContext {
   host: HostResolution;
   /** Set when skillId was provided and the skill was installed successfully. */
   skillPath?: string;
+  /** The SKILL.md of each trait skill installed for the declared SDK major. */
+  sdkSkillPaths?: readonly string[];
   /** Detected facts about the project, one line each. */
   facts?: readonly string[];
   /**
@@ -82,6 +85,11 @@ export function assemblePrompt(
   // Skill prompt (appended when a skill was pre-installed)
   if (ctx.skillPath) {
     parts.push(skillPrompt(ctx.skillPath, runDef.reportFile));
+  }
+
+  const sdkNote = sdkSkillReference(ctx.sdkSkillPaths);
+  if (sdkNote) {
+    parts.push(sdkNote);
   }
 
   return parts.join('\n\n');

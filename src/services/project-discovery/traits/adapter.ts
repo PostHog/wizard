@@ -2,7 +2,11 @@
 
 import path from 'path';
 import { Integration } from '@shared/constants';
-import type { TraitSource } from '@programs/program-contract';
+import type {
+  ProgramReadyContext,
+  ProgramSession,
+  TraitSource,
+} from '@programs/program-contract';
 import type {
   AgenticDetectionReport,
   AgenticProject,
@@ -11,6 +15,27 @@ import { getDiscovery } from '../discover';
 import { setTraits, type TraitSink, type TraitWrite } from './store';
 
 const INTEGRATIONS = new Set<string>(Object.values(Integration));
+
+/** A source whose answer comes from a model. */
+export type ModelSource = Extract<TraitSource, 'agentic' | 'decisions'>;
+
+/** frameworkContext key holding what each model source called the repo. */
+export const MODEL_REPO_TYPES_KEY = 'modelRepoTypes';
+
+/** Where a report lands: its traits, and with the setter, what its source called the repo. */
+export type ReportSink = TraitSink &
+  Partial<Pick<ProgramReadyContext, 'setFrameworkContext'>>;
+
+/** What each model source that answered called the repo. Static discovery's answer is the project list's `repoType`. */
+export function getModelRepoTypes(
+  session: Pick<ProgramSession, 'frameworkContext'>,
+): Partial<Record<ModelSource, AgenticDetectionReport['repoType']>> {
+  return (
+    (session.frameworkContext[MODEL_REPO_TYPES_KEY] as
+      | Partial<Record<ModelSource, AgenticDetectionReport['repoType']>>
+      | undefined) ?? {}
+  );
+}
 
 /** A project path from one directory as a path from the directory `base` is relative to. Backslashes and a trailing slash name the same project. */
 export function joinProjectPath(base: string, projectPath: string): string {
@@ -33,12 +58,13 @@ function reportBase(sink: TraitSink): string {
 /**
  * Write a detection report's answers as traits: `targetId` as `framework`,
  * `recommended` as the main-app mark and `hasPostHog` as `posthogInstalled`.
- * A path the session has no project for becomes one.
+ * A path the session has no project for becomes one. What the report calls the
+ * repo is kept beside them, for the project selection.
  */
 export function applyDetectionReport(
-  sink: TraitSink,
+  sink: ReportSink,
   report: AgenticDetectionReport,
-  source: Extract<TraitSource, 'agentic' | 'decisions'>,
+  source: ModelSource,
   /** The source's probability for one project's answers; agentic detection gives none. */
   confidence?: (project: AgenticProject) => number | undefined,
   /** The directory the report's paths are from, as a path from the workspace root. The run's install directory by default. */
@@ -65,4 +91,8 @@ export function applyDetectionReport(
     });
   }
   setTraits(sink, writes);
+  sink.setFrameworkContext?.(MODEL_REPO_TYPES_KEY, {
+    ...getModelRepoTypes(sink.session),
+    [source]: report.repoType,
+  });
 }

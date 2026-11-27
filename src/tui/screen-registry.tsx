@@ -24,7 +24,7 @@ import { ManualAuthCodeScreen } from './screens/ManualAuthCodeScreen.js';
 import { SetupScreen } from './screens/SetupScreen.js';
 import { AuthScreen } from './screens/AuthScreen.js';
 import { AiOptInRequiredScreen } from './screens/AiOptInRequiredScreen.js';
-import { PlanScreen } from './screens/PlanScreen.js';
+import { ProjectPickerScreen } from './screens/ProjectPickerScreen.js';
 import { RunScreen } from './screens/RunScreen.js';
 import { McpScreen } from './screens/McpScreen.js';
 import { SlackConnectScreen } from './screens/SlackConnectScreen.js';
@@ -85,7 +85,7 @@ export function createScreens(
     [ScreenId.Setup]: <SetupScreen store={store} />,
     [ScreenId.Auth]: <AuthScreen store={store} />,
     [ScreenId.AiOptIn]: <AiOptInRequiredScreen store={store} />,
-    [ScreenId.Plan]: <PlanScreen store={store} />,
+    [ScreenId.ProjectPicker]: <ProjectPickerScreen store={store} />,
     [ScreenId.Run]: <RunScreen store={store} />,
     [ScreenId.Mcp]: (
       <McpScreen store={store} installer={services.mcpInstaller} />

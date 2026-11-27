@@ -26,6 +26,7 @@ export const config: ProgramConfig = {
   command: 'ai-observability',
   description: 'Add PostHog AI Observability to your LLM calls',
   id: 'ai-observability',
+  sdkFeature: 'aiObservability',
   cliOptions: { ...headlessOption, ...regionOption },
   reportFile: AI_OBSERVABILITY_REPORT_FILE,
   run: {

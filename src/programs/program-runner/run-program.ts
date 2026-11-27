@@ -9,7 +9,11 @@ import type {
   RunInput,
   RunResult,
 } from '@agent/types';
-import { getSkillsBaseUrl, type Integration } from '@shared/constants';
+import {
+  getSkillsBaseUrl,
+  WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY,
+  type Integration,
+} from '@shared/constants';
 import { listSkillFolders, removeRunSkills } from '@shared/skill-install';
 import { classifyRunFailure, ErrorCodes, type ErrorCode } from '@shared/errors';
 import {
@@ -37,15 +41,15 @@ import { removeAuditLedger, startAuditLedgerWatcher } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import {
   applyDetectionReport,
-  buildPlan,
+  buildProjectSelection,
   getProjects,
   getTraits,
   DETECTED_PROJECT_KEY,
   detectedProjectOf,
   getDiscovery,
   picksProject,
-  planAsks,
-  planNeedsPick,
+  askUserToSelectProject,
+  shouldRankProjects,
   projectDiscoveryMode,
   projectFromWorkspaceRoot,
   projectPathOf,
@@ -53,9 +57,12 @@ import {
   reportDiscovery,
   reportProjectsDiscovered,
   reportProjectsSelected,
+  sdkFeatureGaps,
+  settleProjects,
   toMatchKeys,
   toTraitKeys,
-  type PlanOffer,
+  type ProjectSelection,
+  VERSIONED_SDK_SKILLS_ENABLED_KEY,
 } from '@services/project-discovery';
 import { detectIntegrationProjects } from '@services/detection';
 import { findProgramConfig, getProgramConfig } from './program-registry';
@@ -236,18 +243,18 @@ async function invokeProgram(
   };
   /**
    * The picker can still move the run: no caller named a project, and the
-   * plan offers one other than the project the run started in. What stops the
-   * run in that first project then waits for the pick, so a workspace root with
-   * no framework of its own still reaches the plan.
+   * selection has an eligible one other than the project the run started in.
+   * What stops the run in that first project then waits for the pick, so a
+   * workspace root with no framework of its own still reaches the picker.
    */
   const mayMove = async (): Promise<boolean> => {
     if (!config.appliesTo || input.project !== undefined) return false;
     await settleDiscoveryMode();
     return (
       picksProject(store.session, config) &&
-      buildPlan(store.session, config).projects.some(
+      buildProjectSelection(store.session, config).projects.some(
         (project) =>
-          project.offered && project.path !== store.session.runProject,
+          project.eligible && project.path !== store.session.runProject,
       )
     );
   };
@@ -427,6 +434,13 @@ async function invokeProgram(
       : 'off';
     // Every Decisions request reads this, so `off` stops them all.
     store.setFrameworkContext(DECISIONS_USE_KEY, use);
+    const versionedSdkSkills =
+      flags.flags[WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY] === 'true';
+    store.setFrameworkContext(
+      VERSIONED_SDK_SKILLS_ENABLED_KEY,
+      versionedSdkSkills,
+    );
+    if (versionedSdkSkills) settleProjects(store.readyContext());
     // The answers become traits only when the flag says so and project discovery is on.
     const decisionsAsTraits =
       use === 'traits' &&
@@ -478,7 +492,7 @@ async function invokeProgram(
         if (picks) {
           target = await park(
             pickProject(config, store, {
-              requested:
+              requestedProjectPath:
                 input.project === undefined
                   ? undefined
                   : projectFromWorkspaceRoot(store.session, input.project),
@@ -572,6 +586,17 @@ async function invokeProgram(
         store.setDetectedFramework(scoped.detectedFrameworkLabel);
       }
       const session = (): WizardSession => scoped ?? store.session;
+      const sdkGap = planned.config.sdkFeature
+        ? sdkFeatureGaps(session(), [planned.config.sdkFeature]).find(
+            (gap) => gap.blocking,
+          )
+        : undefined;
+      if (sdkGap) {
+        return settle(RunOutcome.Failed, {
+          code: ErrorCodes.DetectSdkTooOld,
+          message: sdkGap.message,
+        });
+      }
       const runDir = session().installDir;
       const agentRun =
         ownRun ?? (await resolveRun(planned.config, store, runner, scoped));
@@ -754,23 +779,24 @@ async function pickProject(
   config: ProgramConfig,
   store: SessionStore,
   context: {
-    requested?: string;
+    requestedProjectPath?: string;
     workflow?: ProgramOptions['workflow'];
     emit: (event: AgentProgress) => void;
     signal: AbortSignal;
   },
 ): Promise<string | null> {
-  const { requested, workflow, emit, signal } = context;
-  const plan = (): PlanOffer => buildPlan(store.session, config, requested);
+  const { requestedProjectPath, workflow, emit, signal } = context;
+  const buildSelection = (): ProjectSelection =>
+    buildProjectSelection(store.session, config, requestedProjectPath);
   // Agentic detection ranks only where there is a choice to make, and only once.
   const ranked = getProjects(store.session).some((project) =>
     Object.values(project.claims ?? {}).some((claims) =>
       claims.some((claim) => claim.source === 'agentic'),
     ),
   );
-  const rank =
+  const rankProjects =
     config.rankWith?.includes('agentic') && !ranked
-      ? async (): Promise<PlanOffer> => {
+      ? async (): Promise<ProjectSelection> => {
           try {
             const report = await detectIntegrationProjects(store.session, {
               programId: config.id,
@@ -778,32 +804,40 @@ async function pickProject(
               onEvent: (line) => logToFile('[agentic detect]', line),
               onProgress: emit,
             });
+            // A reply that lands after a cancel is dropped, so the session stays as the run left it.
+            if (signal.aborted) return buildSelection();
             applyDetectionReport(store.readyContext(), report, 'agentic');
           } catch (error) {
-            // No answer: the plan opens on static detection alone.
+            // No answer: the selection opens on static detection alone.
             logToFile(
               `[agent-runner] project ranking failed: ${String(error)}`,
             );
           }
-          return plan();
+          return buildSelection();
         }
       : undefined;
 
-  let offer = plan();
-  let picked = offer.picked;
+  let projectSelection = buildSelection();
+  let picked = projectSelection.selectedProjectPath;
   let pickedBy: 'person' | 'caller' | 'default' =
-    requested === undefined ? 'default' : 'caller';
+    requestedProjectPath === undefined ? 'default' : 'caller';
   const asks =
-    workflow !== undefined && planAsks(store.session, config, offer, requested);
+    workflow !== undefined &&
+    askUserToSelectProject(
+      store.session,
+      config,
+      projectSelection,
+      requestedProjectPath,
+    );
   if (asks) {
     const go = await workflow.confirmStep(
       {
-        kind: 'plan',
+        kind: 'project-selection',
         programId: config.id,
         installDir: store.session.installDir,
-        plan: offer,
-        rank,
-        pick: (projectPath) => {
+        projectSelection,
+        rankProjects,
+        selectProject: (projectPath) => {
           picked = projectPath;
           pickedBy = 'person';
         },
@@ -811,14 +845,26 @@ async function pickProject(
       { signal },
     );
     if (!go) return null;
-    offer = plan();
-  } else if (requested === undefined && planNeedsPick(offer) && rank) {
+    projectSelection = buildSelection();
+  } else if (
+    requestedProjectPath === undefined &&
+    rankProjects &&
+    shouldRankProjects(store.session, projectSelection)
+  ) {
     // Nobody to ask: the ranking picks, as a person reading it would.
-    offer = await rank();
-    picked = offer.picked;
+    projectSelection = await rankProjects();
+    // A run cancelled during the ranking reports no pick.
+    if (signal.aborted) return null;
+    picked = projectSelection.selectedProjectPath;
   }
-  reportProjectsDiscovered(store.session, offer, config.id);
-  reportProjectsSelected(store.session, offer, picked, config.id, pickedBy);
+  reportProjectsDiscovered(store.session, projectSelection, config.id);
+  reportProjectsSelected(
+    store.session,
+    projectSelection,
+    picked,
+    config.id,
+    pickedBy,
+  );
   return picked;
 }
 
