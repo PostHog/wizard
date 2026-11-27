@@ -1,5 +1,7 @@
+import { CaptureError } from 'posthog-node';
 import {
   buildSeedEvents,
+  seedDemoEvents,
   tallySeedEvents,
   seededProfile,
 } from '../seed-events';
@@ -114,5 +116,80 @@ describe('seededProfile', () => {
     expect(p.products.featureFlags).toBe(true);
     expect(p.products.sessionReplay).toBe(false);
     expect(p.products.experiments).toBe(false);
+  });
+});
+
+describe('seedDemoEvents', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const baseArgs = {
+    projectApiKey: 'phc_test_key',
+    apiHost: 'https://us.i.posthog.com',
+    baseProfile: degradedProfile(),
+    now: NOW,
+  };
+
+  it('sends the demo batch to capture v1 and resolves with the seeded profile', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('{"results":{}}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const profile = await seedDemoEvents(baseArgs);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      'https://us.i.posthog.com/i/v1/analytics/events',
+    );
+    expect(profile.seeded).toBe(true);
+    expect(profile.tier).toBe('rich');
+  });
+
+  it('rejects with CaptureError on HTTP 400 delivery failure', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response('bad request', { status: 400 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(seedDemoEvents(baseArgs)).rejects.toBeInstanceOf(CaptureError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects with CaptureError preserving network cause and drains once', async () => {
+    const netErr = Object.assign(new TypeError('fetch failed'), {
+      code: 'ECONNREFUSED',
+    });
+    const fetchMock = vi.fn().mockRejectedValue(netErr);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const caught = await seedDemoEvents(baseArgs).catch((err) => err);
+
+    expect(caught).toBeInstanceOf(CaptureError);
+    expect(caught.cause).toBe(netErr);
+    // 1 initial attempt + 3 default retries = 4 (single shutdown drain, not 8).
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('aborts in-flight seeding when signal fires', async () => {
+    const ac = new AbortController();
+    const fetchMock = vi.fn(
+      (_url: unknown, init?: Parameters<typeof fetch>[1]) => {
+        ac.abort();
+        return Promise.reject(
+          init?.signal?.reason ?? new DOMException('Aborted', 'AbortError'),
+        );
+      },
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      seedDemoEvents({ ...baseArgs, signal: ac.signal }),
+    ).rejects.toThrow('Seeding aborted');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

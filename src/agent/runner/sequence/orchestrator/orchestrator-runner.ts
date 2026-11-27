@@ -944,6 +944,7 @@ async function executeOrchestrator(
       matchKeys,
       installDir: input.installDir,
       triageProvider: boot.triageProvider,
+      reportTelemetry: config.reportDiscoveryTelemetry?.() ?? false,
       signal,
     });
     if (traitInstall.aborted) return cancelledRun();

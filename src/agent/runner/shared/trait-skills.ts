@@ -32,12 +32,14 @@ export async function installTraitSkills({
   matchKeys,
   installDir,
   triageProvider,
+  reportTelemetry = false,
   signal,
 }: {
   entries: readonly SkillEntry[];
   matchKeys: MatchKeys;
   installDir: string;
   triageProvider: LLMProvider | undefined;
+  reportTelemetry?: boolean;
   signal?: AbortSignal;
 }): Promise<{ paths: string[]; aborted: boolean }> {
   const paths: string[] = [];
@@ -73,7 +75,7 @@ export async function installTraitSkills({
   }
 
   const declaredSdks = matchKeys.posthogSdks ?? [];
-  if (declaredSdks.length > 0 || matched.length > 0) {
+  if (reportTelemetry && (declaredSdks.length > 0 || matched.length > 0)) {
     const matchedTags = new Set(matched.flatMap((skill) => skill.tags ?? []));
     const unmatchedSdks = declaredSdks.filter(
       (sdk) => !matchedTags.has(`posthogSdks:${sdk}`),

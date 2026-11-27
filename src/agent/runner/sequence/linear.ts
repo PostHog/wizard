@@ -103,6 +103,7 @@ async function executeLinear(
         matchKeys,
         installDir: input.installDir,
         triageProvider: boot.triageProvider,
+        reportTelemetry: config.reportDiscoveryTelemetry?.() ?? false,
         signal,
       });
       if (traitInstall.aborted) return aborted();

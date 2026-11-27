@@ -157,7 +157,7 @@ export type PosthogSdkSummary = {
 };
 
 const EXACT_PIN_SPEC =
-  /^\s*(?:(?:==|=)\s*v?\d+(?:\.\d+){1,2}|v?\d+\.\d+\.\d+)(?:[-+.a-zA-Z0-9]+)?\s*$/;
+  /^(?:(?:==|=)\s?v?\d+(?:\.\d+){1,2}|v?\d+\.\d+\.\d+)(?:[-+.a-zA-Z0-9]+)?$/;
 
 /** Summarize every PostHog SDK across `manifests` (all ecosystems, including unversioned entries) without paths or raw specs. */
 export function summarizePosthogSdks(
@@ -177,22 +177,32 @@ export function summarizePosthogSdks(
       const sdkId = `${manifest.ecosystem}:${lower}`;
       detectedSdks.add(sdkId);
       const spec = manifest.versions[pkg] ?? '';
-      const range = declaredRange(spec);
-      const floor = range ? declaredFloor(spec) : undefined;
-      if (!range || !floor) {
+      try {
+        const range = declaredRange(spec);
+        const floor = range ? declaredFloor(spec) : undefined;
+        if (!range || !floor) {
+          unversionedCount += 1;
+          pinKinds.add('none');
+          continue;
+        }
+        const [majorPart, minorPart = '0'] = floor.split('.');
+        const majorNum = Number(majorPart);
+        const nextMajor = majorNum + 1;
+        if (!Number.isSafeInteger(nextMajor)) {
+          throw new RangeError('Major version exceeds safe integer');
+        }
+        const trimmed = spec.trim();
+        const pinKind: Exclude<SdkVersionPin, 'mixed'> =
+          trimmed.length <= 64 && EXACT_PIN_SPEC.test(trimmed)
+            ? 'exact'
+            : intersects(range, `>=${nextMajor}.0.0`)
+            ? 'wide_range'
+            : 'major_range';
+        versions.add(`${sdkId}@${majorPart}.${minorPart}`);
+        pinKinds.add(pinKind);
+      } catch {
         unversionedCount += 1;
         pinKinds.add('none');
-        continue;
-      }
-      const [majorPart, minorPart = '0'] = floor.split('.');
-      const majorNum = Number(majorPart);
-      versions.add(`${sdkId}@${majorPart}.${minorPart}`);
-      if (EXACT_PIN_SPEC.test(spec)) {
-        pinKinds.add('exact');
-      } else if (intersects(range, `>=${majorNum + 1}.0.0`)) {
-        pinKinds.add('wide_range');
-      } else {
-        pinKinds.add('major_range');
       }
     }
   }

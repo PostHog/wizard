@@ -198,5 +198,67 @@ describe('PostHog SDK versions', () => {
         'rubygems:posthog-ruby',
       ],
     });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'requirements.txt',
+          ecosystem: 'pypi',
+          packages: ['posthog'],
+          versions: { posthog: '==7.40.0' },
+        },
+      ]),
+    ).toMatchObject({
+      sdk_version_found: 'pypi:posthog@7.40',
+      sdk_version_pin: 'exact',
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'requirements.txt',
+          ecosystem: 'pypi',
+          packages: ['posthog'],
+          versions: { posthog: '>=6' },
+        },
+      ]),
+    ).toMatchObject({
+      sdk_version_found: 'pypi:posthog@6.0',
+      sdk_version_pin: 'wide_range',
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'package.json',
+          ecosystem: 'npm',
+          packages: ['posthog-node'],
+          versions: { 'posthog-node': 'workspace:*' },
+        },
+      ]),
+    ).toEqual({
+      has_existing_sdk: true,
+      sdk_version_pin: 'none',
+      detected_sdk_count: 1,
+      unversioned_sdk_count: 1,
+      detected_sdks: ['npm:posthog-node'],
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'package.json',
+          ecosystem: 'npm',
+          packages: ['posthog-node'],
+          versions: { 'posthog-node': `>=${Number.MAX_SAFE_INTEGER}.0.0` },
+        },
+      ]),
+    ).toEqual({
+      has_existing_sdk: true,
+      sdk_version_pin: 'none',
+      detected_sdk_count: 1,
+      unversioned_sdk_count: 1,
+      detected_sdks: ['npm:posthog-node'],
+    });
   });
 });

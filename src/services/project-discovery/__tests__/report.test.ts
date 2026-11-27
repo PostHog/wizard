@@ -214,5 +214,53 @@ describe('reportDiscovery', () => {
 
       expect(tagged()).toEqual([]);
     });
+
+    it('reports PostHog SDK tags and event across monorepo subprojects only when sharing is allowed', async () => {
+      vi.mocked(analytics.wizardCapture).mockClear();
+      const webDir = path.join(tmpDir, 'apps', 'web');
+      fs.mkdirSync(webDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(webDir, 'package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '^5.1.0' } }),
+      );
+
+      // Declined sharing sends neither tags nor event.
+      const declined = new SessionStore(buildSession({ installDir: tmpDir }));
+      await runDiscovery(PROGRAM, declined.readyContext());
+      declined.declineSharing();
+      declined.setCredentials(CREDENTIALS);
+      vi.mocked(analytics.setTag).mockClear();
+      reportDiscovery(declined);
+      expect(tagged()).toEqual([]);
+      expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+        'posthog sdks detected',
+        expect.anything(),
+      );
+
+      // Granted sharing reports subproject SDKs under runProject '.'.
+      const store = await ciStore();
+      store.setCredentials(CREDENTIALS);
+      reportDiscovery(store);
+
+      expect(tagged()).toEqual(
+        expect.arrayContaining([
+          ['has_existing_sdk', true],
+          ['detected_sdk_count', 1],
+          ['sdk_version_found', 'npm:posthog-node@5.1'],
+          ['sdk_version_pin', 'major_range'],
+        ]),
+      );
+      expect(analytics.wizardCapture).toHaveBeenCalledWith(
+        'posthog sdks detected',
+        {
+          has_existing_sdk: true,
+          sdk_version_found: 'npm:posthog-node@5.1',
+          sdk_version_pin: 'major_range',
+          detected_sdk_count: 1,
+          unversioned_sdk_count: 0,
+          detected_sdks: ['npm:posthog-node'],
+        },
+      );
+    });
   });
 });

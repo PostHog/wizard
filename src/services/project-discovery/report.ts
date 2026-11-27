@@ -15,6 +15,7 @@ import path from 'path';
 import { mayReportDiscovery } from '@shared/run-state';
 import { VERSION } from '@shared/version';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 import type { WizardSession } from '../session/wizard-session';
 import { detectedEmailProviders } from './email-providers';
 import { workspaceFingerprint } from './fingerprint';
@@ -62,7 +63,14 @@ export function reportDiscovery(store: DiscoveryReportStore): void {
 
   if (!mayReportDiscovery(session)) return;
   const discovery = getDiscovery(session);
-  const sdkSummary = discovery ? summarizeRunSdks(session, discovery) : null;
+  let sdkSummary: ReturnType<typeof summarizePosthogSdks> | null = null;
+  if (discovery) {
+    try {
+      sdkSummary = summarizeRunSdks(session, discovery);
+    } catch (error) {
+      logToFile('[discovery] sdk summary failed:', error);
+    }
+  }
   if (sdkSummary) applySdkTags(sdkSummary);
 
   const { credentials } = session;
@@ -78,8 +86,15 @@ export function reportDiscovery(store: DiscoveryReportStore): void {
 }
 
 function summarizeRunSdks(session: WizardSession, discovery: Discovery) {
+  const prefix = session.runProject === '.' ? '' : `${session.runProject}/`;
   return summarizePosthogSdks(
-    discovery.files.manifests.filter((m) => m.dir === session.runProject),
+    discovery.files.manifests.filter(
+      (m) =>
+        m.dir !== null &&
+        (prefix === '' ||
+          m.dir === session.runProject ||
+          m.dir.startsWith(prefix)),
+    ),
   );
 }
 

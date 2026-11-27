@@ -224,6 +224,8 @@ export interface ResolvedRunConfig {
   matchKeys?: () => MatchKeys;
   /** The project's traits by name, read when the orchestrator applies each task's `skipWhen`. */
   traitKeys?: () => MatchKeys;
+  /** Whether discovery-derived telemetry (e.g. SDK skill resolution) may be sent. Defaults to false. */
+  reportDiscoveryTelemetry?: () => boolean;
   /** Completion hooks, bound by the caller. */
   hooks?: RunHooks;
   scanReport?: 'flush' | 'defer'; // defer leaves the scan report to the outer run
