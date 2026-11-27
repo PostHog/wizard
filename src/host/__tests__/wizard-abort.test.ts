@@ -262,6 +262,25 @@ describe('wizardAbort', () => {
     expect(mockAnalytics.shutdown).toHaveBeenCalledWith('error');
   });
 
+  it.each([
+    ErrorCodes.DetectNoPosthogSdk,
+    ErrorCodes.DetectNoSources,
+    ErrorCodes.DetectUnsupportedVersion,
+  ])('does not capture a %s detection failure', async (code) => {
+    await ended({
+      message: 'Prerequisites not met',
+      code,
+      error: new WizardError('prerequisites failed', undefined, code),
+      status: 'error',
+    });
+
+    expect(mockAnalytics.captureException).not.toHaveBeenCalled();
+    expect(mockAnalytics.shutdown).toHaveBeenCalledWith('error');
+    expect(ui.outroError).toHaveBeenCalledWith(
+      expect.objectContaining({ errorCode: code }),
+    );
+  });
+
   it('shuts down as the explicit status even when an Error is provided', async () => {
     const error = new Error('stopped');
 
