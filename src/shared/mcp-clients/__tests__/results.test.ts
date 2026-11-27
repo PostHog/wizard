@@ -50,6 +50,10 @@ describe('isOk', () => {
   });
 });
 
+// Built from parts so the secret scanner does not read a test fixture as a key.
+const BEGIN_KEY = ['-----BEGIN', 'PRIVATE KEY-----'].join(' ');
+const END_KEY = ['-----END', 'PRIVATE KEY-----'].join(' ');
+
 describe('redactSecrets', () => {
   it('masks secrets logged as JSON tool inputs, raw and escaped', () => {
     const logged =
@@ -149,7 +153,44 @@ describe('redactSecrets', () => {
     // value would file this as an exception instead of hinting.
     expect(
       redactSecrets('Missing OPENAI_API_KEY=sk-proj-0123456789abcdefghij'),
-    ).toContain('OPENAI_API_KEY');
+    ).toBe('Missing OPENAI_API_KEY=[redacted]');
+  });
+
+  it('masks a minted gateway token', () => {
+    expect(redactSecrets('gateway refused phe_abc123DEF456')).toBe(
+      'gateway refused [redacted]',
+    );
+  });
+
+  it('masks an env line inside a JSON-serialized tool output', () => {
+    const logged = JSON.stringify({ output: 'API_KEY="s3cr3t-value"' });
+    expect(redactSecrets(logged)).not.toContain('s3cr3t-value');
+  });
+
+  it('masks a password with punctuation', () => {
+    expect(redactSecrets("password: 'p@ss!word1234'")).not.toContain(
+      'p@ss!word1234',
+    );
+  });
+
+  it('masks the secret after a quoted value a log line cut short', () => {
+    const tail = 'TOKEN="abcdefgh\nnext line\nDB_PASSWORD="hunter2hunter2"';
+    expect(redactSecrets(tail)).not.toContain('hunter2hunter2');
+  });
+
+  it.each([
+    ['its end', `tail:\n${BEGIN_KEY}\nMIIEvQIBADANBg`],
+    ['its start', `MIIEvQIBADANBg\n${END_KEY}\nnext`],
+  ])('masks a PEM block cut at %s', (_cut, text) => {
+    expect(redactSecrets(text)).not.toContain('MIIEvQIBADANBg');
+  });
+
+  it('masks a raw PEM private key block', () => {
+    const pem = `${BEGIN_KEY.replace(
+      'BEGIN',
+      'BEGIN RSA',
+    )}\nMIIEowIBAAKCAQEA\n${END_KEY.replace('END', 'END RSA')}`;
+    expect(redactSecrets(`key file:\n${pem}`)).toBe('key file:\n[redacted]');
   });
 
   it('leaves an ordinary URL and ordinary words alone', () => {
@@ -196,6 +237,12 @@ describe('namesWithStatus', () => {
 });
 
 describe('scrubHomePaths', () => {
+  it('scrubs a Windows user path nested twice in JSON', () => {
+    expect(
+      scrubHomePaths(JSON.stringify(JSON.stringify('C:\\Users\\alice\\proj'))),
+    ).not.toContain('alice');
+  });
+
   it('scrubs a Windows home path that JSON escaping doubled', () => {
     expect(
       scrubHomePaths('"cwd": "C:\\\\Users\\\\alice\\\\proj"'),

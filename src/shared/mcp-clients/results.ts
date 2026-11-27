@@ -56,7 +56,7 @@ const SECRET_NAME =
 export const redactSecrets = (raw: string): string =>
   raw
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
-    .replace(/ph[xspcar]_[A-Za-z0-9_-]+/g, '[redacted]')
+    .replace(/ph[xspcare]_[A-Za-z0-9_-]+/g, '[redacted]')
     // `https://user:token@github.com/...` — git prints the whole remote back;
     // `postgres://user:password@host/db` is the same shape for a database.
     .replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s:@]+:[^/\s@]+@/gi, '$1[redacted]@')
@@ -69,12 +69,19 @@ export const redactSecrets = (raw: string): string =>
     .replace(/\b[rs]k_(?:live|test)_[A-Za-z0-9]{16,}/g, '[redacted]')
     // Google keys, which a config error quotes the same way.
     .replace(/\bAIza[A-Za-z0-9_-]{16,}/g, '[redacted]')
+    .replace(
+      /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
+      '[redacted]',
+    )
+    // A log tail or a sliced log line can cut a key block at either end.
+    .replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*$/, '[redacted]')
+    .replace(/^[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/, '[redacted]')
     // The catch-all for providers we have no shape for: a config error prints
     // the offending line, and the variable's own name says it holds a secret.
     // The name is kept — `OPENAI_API_KEY` is wording an expected-failure hint
     // matches on, and masking it would turn that hint back into an exception.
     .replace(
-      /\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Za-z0-9_]*)(\s*[=:]\s*)["']?[A-Za-z0-9_\-./+]{8,}["']?/gi,
+      /\b([A-Za-z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIALS?)[A-Za-z0-9_]*)(\s*[=:]\s*)(?:\\"(?:\\\\.|\\[^"\\]|[^\\\n])+\\"|"(?:[^"\\\n]|\\.)+"|'(?:[^'\\\n]|\\.)+'|["']?[^\s"'\\,;}[\])]{8,})/gi,
       '$1$2[redacted]',
     )
     // The same names as JSON keys, raw or escaped, as tool inputs reach the log.
@@ -98,7 +105,7 @@ export const redactSecrets = (raw: string): string =>
 export const scrubHomePaths = (raw: string): string =>
   raw
     .replace(/\/(?:Users|home)\/[^/\s'"]+/g, '~')
-    .replace(/[A-Za-z]:\\{1,2}Users\\{1,2}[^\\\s'"]+/gi, '~');
+    .replace(/[A-Za-z]:\\+Users\\+[^\\\s'"]+/gi, '~');
 
 /**
  * A failure that lives entirely in the user's environment: a CLI too old, a

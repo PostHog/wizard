@@ -4,6 +4,7 @@ import * as path from 'path';
 import {
   configureLogFile,
   getLogFilePath,
+  getProcessLogTail,
   initLogFile,
   logToFile,
 } from '@utils/debug';
@@ -19,6 +20,17 @@ describe('log file writing', () => {
   afterEach(() => {
     configureLogFile({ path: originalPath, enabled: true, pin: false });
     fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it('keeps only whole lines from the last 64K of this process', () => {
+    configureLogFile({ path: path.join(tmpRoot, 'w.log'), enabled: true });
+    logToFile('first line that must age out');
+    for (let i = 0; i < 700; i++) logToFile(`line ${i} ${'x'.repeat(100)}`);
+    const tail = getProcessLogTail();
+    expect(tail.length).toBeLessThanOrEqual(64 * 1024);
+    expect(tail).not.toContain('first line that must age out');
+    expect(tail.startsWith('[')).toBe(true);
+    expect(tail).toContain('line 699');
   });
 
   it('creates a missing log directory instead of dropping the log', () => {

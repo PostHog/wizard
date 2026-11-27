@@ -190,11 +190,15 @@ it("reports only this run's log lines when another run shares the log file", () 
   configureLogFile({ path: logPath, enabled: true });
   logToFile('this run started');
   fs.appendFileSync(logPath, 'another run read its secret source\n');
-  logToFile('this run failed');
+  logToFile(
+    'this run failed with Bearer phx_logged_secret in /Users/alice/app',
+  );
   const { store } = setup();
   const logTail = String(
     failureReportProperties(store.session, store.router.activeProgram).log_tail,
   );
   expect(logTail).toContain('this run failed');
   expect(logTail).not.toContain('another run');
+  expect(logTail).not.toContain('phx_logged_secret');
+  expect(logTail).not.toContain('alice');
 });

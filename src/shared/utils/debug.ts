@@ -70,8 +70,6 @@ function reportLogFailureOnce(err: unknown): void {
     });
 }
 
-// The log's directory isn't guaranteed to exist (Windows %TEMP%,
-// POSTHOG_WIZARD_LOG_DIR) — create it on first failure.
 // Every run appends to one shared file, so a failure report reads this process's own lines from memory.
 const PROCESS_LOG_TAIL_CHARS = 64 * 1024;
 let processLogTail = '';
@@ -87,6 +85,8 @@ function keepInProcessTail(text: string): void {
   processLogTail = kept.slice(kept.indexOf('\n') + 1);
 }
 
+// The log's directory isn't guaranteed to exist (Windows %TEMP%,
+// POSTHOG_WIZARD_LOG_DIR) — create it on first failure.
 function appendLine(text: string): void {
   keepInProcessTail(text);
   try {

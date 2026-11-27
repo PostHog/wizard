@@ -632,10 +632,10 @@ export class WizardStore implements TuiView {
   }
 
   sendFailureReport(): void {
-    analytics.wizardCapture(
-      'failure reported',
-      failureReportProperties(this.session, this.router.activeProgram),
-    );
+    analytics.wizardCapture('failure reported', {
+      ...sessionProperties(this.session),
+      ...failureReportProperties(this.session, this.router.activeProgram),
+    });
   }
 
   setSkillId(skillId: string | null): void {

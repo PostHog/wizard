@@ -14,7 +14,7 @@ import {
   OAUTH_TIMEOUT_MS,
   WIZARD_USER_AGENT,
 } from '@shared/constants';
-import { ErrorCodes } from '@shared/errors';
+import { ErrorCodes, WizardError } from '@shared/errors';
 import { abortOnScreens } from '@tui/abort';
 import type { WizardStore } from '@tui/store';
 import { analytics } from '@utils/analytics';
@@ -609,7 +609,7 @@ export async function performOAuthFlow(
           ? 'timeout'
           : 'unknown';
 
-        analytics.captureException(error, {
+        const captureContext = {
           step: 'oauth_flow',
           oauth_error_code: oauthErrorCode,
           oauth_error_description: flowError?.description,
@@ -618,19 +618,23 @@ export async function performOAuthFlow(
           // Collapse OAuth callback failures of the same kind into one issue
           // instead of fragmenting by each user's install path in the stack trace.
           $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
-        });
+        };
 
-        await abortOnScreens(
-          store,
-          failureMessage
-            ? {
-                message: failureMessage,
-                code: accessDenied
-                  ? ErrorCodes.AuthAccessDenied
-                  : ErrorCodes.AuthLoginFailed,
-              }
-            : undefined,
-        );
+        if (!failureMessage) {
+          analytics.captureException(error, captureContext);
+          await abortOnScreens(store);
+          throw error;
+        }
+        const code = accessDenied
+          ? ErrorCodes.AuthAccessDenied
+          : ErrorCodes.AuthLoginFailed;
+        // wizardAbort captures this once; a separate capture here would count the failure twice.
+        await abortOnScreens(store, {
+          message: failureMessage,
+          code,
+          status: accessDenied ? 'cancelled' : 'error',
+          error: new WizardError(error.message, captureContext, code),
+        });
         throw error;
       }
     }

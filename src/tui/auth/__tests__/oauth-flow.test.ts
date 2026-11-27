@@ -14,6 +14,7 @@ import axios from 'axios';
 import * as net from 'node:net';
 import { abortOnScreens } from '@tui/abort';
 import type { WizardStore } from '@tui/store';
+import { analytics } from '@utils/analytics';
 import { openTrackedLink } from '@utils/links';
 import { performOAuthFlow } from '../oauth';
 
@@ -97,11 +98,16 @@ describe('the OAuth flow', () => {
   });
 
   it.each([
-    ['access_denied', 'Authorization was cancelled', 'PHW_AUTH_ACCESS_DENIED'],
-    ['invalid_scope', 'invalid_scope', 'PHW_AUTH_LOGIN_FAILED'],
+    [
+      'access_denied',
+      'Authorization was cancelled',
+      'PHW_AUTH_ACCESS_DENIED',
+      'cancelled',
+    ],
+    ['invalid_scope', 'invalid_scope', 'PHW_AUTH_LOGIN_FAILED', 'error'],
   ])(
     'stops the login when the callback carries %s, says why, and frees its port',
-    async (oauthError, shown, code) => {
+    async (oauthError, shown, code, status) => {
       const { store, wizardStore } = fakeStore();
 
       const flow = performOAuthFlow({ scopes: ['user:read'] }, wizardStore);
@@ -115,7 +121,15 @@ describe('the OAuth flow', () => {
       expect(abortOnScreens).toHaveBeenCalledWith(wizardStore, {
         message: expect.stringContaining(shown),
         code,
+        status,
+        error: expect.objectContaining({
+          context: expect.objectContaining({
+            $exception_fingerprint: `wizard_oauth_${oauthError}`,
+          }),
+        }),
       });
+      // abortOnScreens captures the error; a second capture here would count it twice.
+      expect(analytics.captureException).not.toHaveBeenCalled();
       expect(axios.post).not.toHaveBeenCalled();
       // The next login listens on the same port, so the failed one must have released it.
       const reuse = net.createServer();
