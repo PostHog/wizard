@@ -129,6 +129,7 @@ describe('installTraitSkills', () => {
     yaraScanResult = null;
     seenProviders.length = 0;
     vi.mocked(analytics.wizardCapture).mockClear();
+    vi.mocked(analytics.setTag).mockClear();
   });
 
   afterEach(() => {
@@ -146,13 +147,77 @@ describe('installTraitSkills', () => {
       matchKeys: { posthogSdks: ['posthog-node@5'] },
       installDir: dir,
       triageProvider: provider,
+      reportTelemetry: true,
     });
 
     expect(result).toEqual({ paths: [], aborted: false });
     expect(seenProviders).toEqual([provider]);
+    expect(analytics.setTag).not.toHaveBeenCalledWith(
+      'sdk_skills',
+      expect.anything(),
+    );
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'sdk_non_default_major',
+      false,
+    );
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'sdk trait skill resolved',
-      { skill_id: 'sdk-posthog-node-v5', installed: false },
+      'sdk skills resolved',
+      {
+        resolved_sdk_skill_ids: [],
+        non_default_sdk_skill_ids: [],
+        failed_sdk_skill_ids: ['sdk-posthog-node-v5'],
+        unmatched_sdks: [],
+      },
+    );
+  });
+
+  it('reports default skills and unmatched_sdks with sdk_skills tags when telemetry is allowed', async () => {
+    const entries = mockMenuAndZip();
+
+    const result = await installTraitSkills({
+      entries,
+      matchKeys: { posthogSdks: ['posthog-node@6', 'rubygems:posthog-ruby@3'] },
+      installDir: dir,
+      triageProvider: undefined,
+      reportTelemetry: true,
+    });
+
+    expect(result.aborted).toBe(false);
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'sdk_skills',
+      'sdk-posthog-node-v6',
+    );
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'sdk_non_default_major',
+      false,
+    );
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      'sdk skills resolved',
+      {
+        resolved_sdk_skill_ids: ['sdk-posthog-node-v6'],
+        non_default_sdk_skill_ids: [],
+        failed_sdk_skill_ids: [],
+        unmatched_sdks: ['rubygems:posthog-ruby@3'],
+      },
+    );
+  });
+
+  it('emits neither sdk skills resolved nor SDK tags when reportTelemetry is false', async () => {
+    const entries = mockMenuAndZip();
+
+    const result = await installTraitSkills({
+      entries,
+      matchKeys: { posthogSdks: ['posthog-node@5', 'rubygems:posthog-ruby@3'] },
+      installDir: dir,
+      triageProvider: undefined,
+      reportTelemetry: false,
+    });
+
+    expect(result.paths).toHaveLength(1);
+    expect(analytics.setTag).not.toHaveBeenCalled();
+    expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+      'sdk skills resolved',
+      expect.anything(),
     );
   });
 
@@ -192,6 +257,7 @@ describe('runOrchestrator with trait SDK skills', () => {
           framework: ['nextjs'],
           posthogSdks: ['posthog-node@5'],
         }),
+        reportDiscoveryTelemetry: () => true,
       },
       input: { installDir: dir, flags: { ci: true } },
       boot: {
@@ -218,6 +284,7 @@ describe('runOrchestrator with trait SDK skills', () => {
     seenProviders.length = 0;
     seenTaskPrompt = '';
     vi.mocked(analytics.wizardCapture).mockClear();
+    vi.mocked(analytics.setTag).mockClear();
   });
 
   afterEach(() => {
@@ -236,9 +303,22 @@ describe('runOrchestrator with trait SDK skills', () => {
     expect(seenTaskPrompt).toContain(
       path.join('.claude', 'skills', 'sdk-posthog-node-v5', 'SKILL.md'),
     );
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'sdk_skills',
+      'sdk-posthog-node-v5',
+    );
+    expect(analytics.setTag).toHaveBeenCalledWith(
+      'sdk_non_default_major',
+      true,
+    );
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
-      'sdk trait skill resolved',
-      { skill_id: 'sdk-posthog-node-v5', installed: true },
+      'sdk skills resolved',
+      {
+        resolved_sdk_skill_ids: ['sdk-posthog-node-v5'],
+        non_default_sdk_skill_ids: ['sdk-posthog-node-v5'],
+        failed_sdk_skill_ids: [],
+        unmatched_sdks: [],
+      },
     );
   });
 

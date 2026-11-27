@@ -1,5 +1,6 @@
 /** The SDK registry: the SDKs `installedSdks` names, each with the package names that show it. */
 
+import { intersects } from 'semver';
 import type { SdkFeature } from '@programs/program-contract';
 import { declaredFloor, declaredRange } from '@utils/semver';
 import { POSTHOG_SDKS } from '../../detection/package-scanning';
@@ -135,3 +136,101 @@ export const SDK_FEATURE_MINIMUMS: {
     minimums: { 'npm:posthog-node': '5.0.0' },
   },
 };
+
+export type SdkVersionPin =
+  | 'exact'
+  | 'major_range'
+  | 'wide_range'
+  | 'none'
+  | 'mixed';
+
+/** Closed-schema, path-free SDK version summary for discovery telemetry. */
+export type PosthogSdkSummary = {
+  has_existing_sdk: boolean;
+  /** Comma-joined sorted unique `<ecosystem>:<lowercased-pkg>@<major>.<minor>` (patch omitted), omitted when none parsed. */
+  sdk_version_found?: string;
+  /** How the declared SDK version(s) are constrained, omitted when no PostHog SDK is detected. */
+  sdk_version_pin?: SdkVersionPin;
+  detected_sdk_count: number;
+  unversioned_sdk_count: number;
+  detected_sdks: string[];
+};
+
+const EXPLICIT_EXACT_PIN_SPEC =
+  /^(?:==|=)\s?v?\d+(?:\.\d+){1,2}(?:[-+.a-zA-Z0-9]+)?$/;
+const BARE_EXACT_PIN_SPEC = /^v?\d+\.\d+\.\d+(?:[-+.a-zA-Z0-9]+)?$/;
+
+function isExactPin(trimmedSpec: string, ecosystem: string): boolean {
+  if (trimmedSpec.length > 64) return false;
+  if (EXPLICIT_EXACT_PIN_SPEC.test(trimmedSpec)) return true;
+  // Cargo treats bare `x.y.z` as a caret requirement (`^x.y.z`), not an exact pin.
+  return ecosystem !== 'cargo' && BARE_EXACT_PIN_SPEC.test(trimmedSpec);
+}
+
+/** Summarize every PostHog SDK across `manifests` (all ecosystems, including unversioned entries) without paths or raw specs. */
+export function summarizePosthogSdks(
+  manifests: readonly DiscoveredManifest[],
+): PosthogSdkSummary {
+  let detectedCount = 0;
+  let unversionedCount = 0;
+  const detectedSdks = new Set<string>();
+  const versions = new Set<string>();
+  const pinKinds = new Set<Exclude<SdkVersionPin, 'mixed'>>();
+
+  for (const manifest of manifests) {
+    for (const pkg of manifest.packages) {
+      const lower = pkg.toLowerCase();
+      if (!POSTHOG_SDK_PACKAGES.has(lower)) continue;
+      detectedCount += 1;
+      const sdkId = `${manifest.ecosystem}:${lower}`;
+      detectedSdks.add(sdkId);
+      const spec = manifest.versions[pkg] ?? '';
+      try {
+        const range = declaredRange(spec);
+        const floor = range ? declaredFloor(spec) : undefined;
+        if (!range || !floor) {
+          unversionedCount += 1;
+          pinKinds.add('none');
+          continue;
+        }
+        const [majorPart, minorPart = '0'] = floor.split('.');
+        const majorNum = Number(majorPart);
+        const nextMajor = majorNum + 1;
+        if (!Number.isSafeInteger(nextMajor)) {
+          throw new RangeError('Major version exceeds safe integer');
+        }
+        const trimmed = spec.trim();
+        const pinKind: Exclude<SdkVersionPin, 'mixed'> = isExactPin(
+          trimmed,
+          manifest.ecosystem,
+        )
+          ? 'exact'
+          : intersects(range, `>=${nextMajor}.0.0`)
+          ? 'wide_range'
+          : 'major_range';
+        versions.add(`${sdkId}@${majorPart}.${minorPart}`);
+        pinKinds.add(pinKind);
+      } catch {
+        unversionedCount += 1;
+        pinKinds.add('none');
+      }
+    }
+  }
+
+  const sdkVersionFound = [...versions].sort().join(',');
+  const sdkVersionPin: SdkVersionPin | undefined =
+    pinKinds.size === 0
+      ? undefined
+      : pinKinds.size === 1
+      ? [...pinKinds][0]
+      : 'mixed';
+
+  return {
+    has_existing_sdk: detectedCount > 0,
+    ...(sdkVersionFound ? { sdk_version_found: sdkVersionFound } : {}),
+    ...(sdkVersionPin ? { sdk_version_pin: sdkVersionPin } : {}),
+    detected_sdk_count: detectedCount,
+    unversioned_sdk_count: unversionedCount,
+    detected_sdks: [...detectedSdks].sort(),
+  };
+}

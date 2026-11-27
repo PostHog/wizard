@@ -93,8 +93,8 @@ importers:
         specifier: ~5.2.0
         version: 5.2.0(@earendil-works/pi-ai@1.1.0(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(@smithy/signature-v4@5.7.4)(undici@8.5.0)(ws@8.21.3)(zod@3.25.76))(@earendil-works/pi-tui@1.1.0)(typebox@1.1.38)(zod@3.25.76)
       posthog-node:
-        specifier: ^5.45.2
-        version: 5.45.2
+        specifier: ^6.0.5
+        version: 6.0.5
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -1929,11 +1929,11 @@ packages:
     resolution: {integrity: sha512-x6fFWCeak8aCGfqZfe6CXYt5xVjxe9Os1cIPmVRcToInKLjhJkRVXvJ/L3/1KxFkjDQdbZV/YsuLKqa8t/xKpA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@posthog/core@1.43.1':
-    resolution: {integrity: sha512-hGM8f5sp3we6Em/RQHXbmyYm554hUx9+9jhf92ZQgDS4/xW72KHyZiO9wcFye+qAx2cJAOhOCDIznmO1FV8IbA==}
+  '@posthog/core@1.69.2':
+    resolution: {integrity: sha512-toMfPKklwLW+a4ZY3/EzM3GNMVXmk2ylGb8NPJXRH4igXMoI8wgNL2jqXOiglWAXqFBLZGYFN1oQx6LVmUTxTg==}
 
-  '@posthog/types@1.397.0':
-    resolution: {integrity: sha512-Pa7FtsBo3V0XrhY4y8Xquwp8U07syuZ2IGQdlsRyxhz0yejQLceFjI58UssCXE5zDCDj3km5l7H3ufD6rHChCg==}
+  '@posthog/types@1.427.0':
+    resolution: {integrity: sha512-2RPVfuGIx0iys78mTOcfdzN7/w7AM1Ak3yu9++4/FonPf08mwGqDkJjThz2dA/34666ToNw5Q4fZoFdgvfNUHw==}
 
   '@posthog/warlock@0.2.5':
     resolution: {integrity: sha512-+VQKICgHNGB1EgYSwJIKIkKXMyOpho15HsycQnGF1AreQ/BbI5mfLaLF8fHsY+UZA0/1kvXkL/82QOBpf6TnTw==}
@@ -4551,12 +4551,18 @@ packages:
     resolution: {integrity: sha512-FfR8sjd4em2T6fb3I2MwAJU7HWVMr9zba+enmQeeWFfCbm+UOC/0X4DS8XtpUTMwWMGbjKYP7xjfNekzyGmB3A==}
     engines: {node: ^10 || ^12 || >=14}
 
-  posthog-node@5.45.2:
-    resolution: {integrity: sha512-QhHw/xL0ntMG/DzqA/qdiKu8JY8ChK5Obm8m1nMJor5sjJ7+pfVJSx1yAynC7iUAJfJ9V+OhBNhDCyi5IFWC0Q==}
+  posthog-node@6.0.5:
+    resolution: {integrity: sha512-trvLy4y6I2SDU9DOJ6vVv3n2Gw8Jp1mbbaxSGGsrgO9ihF2l4Mz/AgVVdTSV9DPv7Y+VeQnfpE6I8ipJlAMtzg==}
     engines: {node: ^20.20.0 || >=22.22.0}
     peerDependencies:
+      '@opentelemetry/api': ^1.2.0
+      '@react-email/render': ^2.1.0
       rxjs: ^7.0.0
     peerDependenciesMeta:
+      '@opentelemetry/api':
+        optional: true
+      '@react-email/render':
+        optional: true
       rxjs:
         optional: true
 
@@ -7519,11 +7525,11 @@ snapshots:
 
   '@pkgr/core@0.2.10': {}
 
-  '@posthog/core@1.43.1':
+  '@posthog/core@1.69.2':
     dependencies:
-      '@posthog/types': 1.397.0
+      '@posthog/types': 1.427.0
 
-  '@posthog/types@1.397.0': {}
+  '@posthog/types@1.427.0': {}
 
   '@posthog/warlock@0.2.5':
     dependencies:
@@ -10324,9 +10330,9 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  posthog-node@5.45.2:
+  posthog-node@6.0.5:
     dependencies:
-      '@posthog/core': 1.43.1
+      '@posthog/core': 1.69.2
 
   prelude-ls@1.2.1: {}
 

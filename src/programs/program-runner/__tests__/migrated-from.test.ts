@@ -9,6 +9,9 @@ vi.mock('posthog-node', () => ({
     capture(event: SentEvent) {
       sent.push(event);
     }
+    on() {
+      return () => undefined;
+    }
     shutdown() {
       return Promise.resolve();
     }

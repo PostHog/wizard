@@ -5,6 +5,7 @@ import type { LLMProvider } from '@posthog/warlock';
 import { downloadSkill } from '@shared/skill-install';
 import type { SkillEntry } from '@shared/skill-menu';
 import {
+  DEFAULT_SKILL_TAG,
   FRAMEWORK_KEY,
   resolveTraitSkills,
   type MatchKeys,
@@ -31,28 +32,32 @@ export async function installTraitSkills({
   matchKeys,
   installDir,
   triageProvider,
+  reportTelemetry = false,
   signal,
 }: {
   entries: readonly SkillEntry[];
   matchKeys: MatchKeys;
   installDir: string;
   triageProvider: LLMProvider | undefined;
+  reportTelemetry?: boolean;
   signal?: AbortSignal;
 }): Promise<{ paths: string[]; aborted: boolean }> {
   const paths: string[] = [];
   if (signal?.aborted) return { paths, aborted: true };
 
-  for (const skill of resolveTraitSkills(entries, matchKeys)) {
+  const matched = resolveTraitSkills(entries, matchKeys);
+  const resolvedIds: string[] = [];
+  const nonDefaultIds: string[] = [];
+  const failedIds: string[] = [];
+
+  for (const skill of matched) {
     if (signal?.aborted) return { paths, aborted: true };
     const installed = await downloadSkill(skill, installDir, {
       scan: (dir) => scanInstalledSkill(dir, triageProvider),
     });
     if (signal?.aborted) return { paths, aborted: true };
-    analytics.wizardCapture('sdk trait skill resolved', {
-      skill_id: skill.id,
-      installed: installed.success,
-    });
     if (!installed.success) {
+      failedIds.push(skill.id);
       logToFile(
         `[sdk-skills] unavailable ${skill.id}: ${
           installed.error ?? 'unknown error'
@@ -60,9 +65,31 @@ export async function installTraitSkills({
       );
       continue;
     }
+    resolvedIds.push(skill.id);
+    if (!skill.tags?.includes(DEFAULT_SKILL_TAG)) {
+      nonDefaultIds.push(skill.id);
+    }
     const skillPath = path.join('.claude', 'skills', skill.id, 'SKILL.md');
     paths.push(skillPath);
     logToFile(`[sdk-skills] installed ${skill.id} at ${skillPath}`);
+  }
+
+  const declaredSdks = matchKeys.posthogSdks ?? [];
+  if (reportTelemetry && (declaredSdks.length > 0 || matched.length > 0)) {
+    const matchedTags = new Set(matched.flatMap((skill) => skill.tags ?? []));
+    const unmatchedSdks = declaredSdks.filter(
+      (sdk) => !matchedTags.has(`posthogSdks:${sdk}`),
+    );
+    if (resolvedIds.length > 0) {
+      analytics.setTag('sdk_skills', resolvedIds.join(','));
+    }
+    analytics.setTag('sdk_non_default_major', nonDefaultIds.length > 0);
+    analytics.wizardCapture('sdk skills resolved', {
+      resolved_sdk_skill_ids: resolvedIds,
+      non_default_sdk_skill_ids: nonDefaultIds,
+      failed_sdk_skill_ids: failedIds,
+      unmatched_sdks: unmatchedSdks,
+    });
   }
   return { paths, aborted: false };
 }

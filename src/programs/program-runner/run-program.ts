@@ -47,6 +47,7 @@ import {
   DETECTED_PROJECT_KEY,
   detectedProjectOf,
   getDiscovery,
+  maySendDiscovery,
   picksProject,
   askUserToSelectProject,
   shouldRankProjects,
@@ -671,6 +672,7 @@ async function invokeProgram(
             // The session's own run project: a step scoped to a sub-folder reads that folder's traits.
             matchKeys: () => toMatchKeys(getTraits(session())),
             traitKeys: () => toTraitKeys(getTraits(session())),
+            reportDiscoveryTelemetry: () => maySendDiscovery(session()),
             projectFacts:
               planned.config.decisions || planned.config.detectedFacts
                 ? () => [
