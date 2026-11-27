@@ -1,4 +1,9 @@
-import { NO_DEFAULT_LIMIT, PRICING_LONG } from '@programs/self-driving';
+import {
+  PRICING_SHORT,
+  PRICING_SIZE,
+  PRICING_WORK,
+  SPEND_CAP,
+} from '@programs/self-driving';
 /**
  * Self-driving learn-deck — the narrative script played while the agent
  * sets up Self-driving. Teaches the vocabulary ladder (signal source →
@@ -175,17 +180,37 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
       pause: 6000,
     },
 
+    CLEAR,
+
+    // Scene 8b — automatic pull requests
     {
-      // No lead-in: PRICING_LONG already names the PR as what's charged, and the
-      // pane only fits ~148 chars per beat.
-      content: PRICING_LONG,
+      content:
+        'For high-priority reports, agents can also write the fix and open a draft pull request automatically.',
       pause: 5000,
     },
 
     {
-      content: NO_DEFAULT_LIMIT,
-      pause: 5000,
+      content:
+        'You configure what counts as high priority. You review and merge.',
+      pause: 4000,
     },
+
+    {
+      content:
+        'You can turn this on in your Self-driving settings, under Autonomy.',
+      pause: 4000,
+    },
+
+    CLEAR,
+
+    // Scene 8c — pricing
+    { content: PRICING_SHORT, pause: 3000 },
+
+    { content: PRICING_WORK, pause: 5000 },
+
+    { content: PRICING_SIZE, pause: 2000 },
+
+    { content: SPEND_CAP, pause: 4000 },
 
     CLEAR,
 

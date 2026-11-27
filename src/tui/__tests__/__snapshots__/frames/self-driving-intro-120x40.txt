@@ -20,7 +20,7 @@
                   PostHog watches how people really use your product, finds issues, and proposes fixes.
 
                         An agent wAbout 10 minutes, with a few questions along the way.our scouts.
-                                   Agents charge a flat $15 per pull request they ship.
+                                    Self-driving uses the same credits as PostHog AI.
                                                     Directory ✔ /app
 
                                                 ▸ Continue

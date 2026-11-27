@@ -1,30 +1,27 @@
 /**
- * Self-driving pricing, in one place. It's stated at six points across the run (intro, tips,
- * learn deck, outro), and a price quoted six ways is a price the reader stops trusting.
+ * Self-driving pricing, in one place. It's stated at several points across the run (intro, tips,
+ * learn deck, outro), and a price quoted several ways is a price the reader stops trusting.
  *
- * Careful with the word "free". The tracking this wizard installs bills as ordinary PostHog
- * usage, and scouts are heading for usage-based pricing too — so anything called free here is
- * a promise with an expiry date. State what the PR costs and leave the rest to usage-based
- * billing, which stays true either side of that change.
+ * Self-driving bills by usage in AI credits, the same credits PostHog AI uses (1 credit = $0.01).
+ * Every piece of agent work spends credits: processing signals, scout runs, research, and fixes
+ * when automatic PRs are on. There is no flat per-PR price. Source of truth:
+ * https://posthog.com/docs/self-driving/pricing
  */
-
-/** Flat USD charge per report that ships a pull request. */
-export const PRICE_PER_PR_USD = 15;
 
 /** One line, for a screen that only has room to say what it costs. */
-export const PRICING_SHORT = `Agents charge a flat $${PRICE_PER_PR_USD} per pull request they ship.`;
+export const PRICING_SHORT =
+  'Self-driving uses the same credits as PostHog AI.';
 
-/** The same fact at length, plus the bit people are surprised by later. */
-export const PRICING_LONG =
-  `A report that ships a pull request costs a flat $${PRICE_PER_PR_USD}. ` +
-  `Everything else follows your usual PostHog usage-based pricing.`;
+/** What the credits pay for. Kept under one learn-deck beat (4 lines of the 37-char pane). */
+export const PRICING_WORK =
+  'You pay for the work agents do: watching your sources, running scouts, ' +
+  'researching reports, and writing fixes if you turn them on.';
 
-/**
- * Nothing caps the spend unless you set it, which is worth saying out loud. Checked against
- * billing: `custom_limits_map` starts empty and a product with no custom limit resolves to
- * `usage_limit: None`, i.e. uncapped. A free plan is capped by its own allocation instead,
- * hence the qualifier.
- */
-export const NO_DEFAULT_LIMIT =
-  'A paid plan has no monthly cap until you set one. Add a PR limit in your inbox sidebar, ' +
-  'and agents pause when they hit it.';
+export const PRICING_SIZE = 'Bigger jobs use more credits.';
+
+/** The same facts at length, for screens with room for a paragraph. */
+export const PRICING_LONG = `${PRICING_SHORT} ${PRICING_WORK} ${PRICING_SIZE}`;
+
+/** Where the spend cap lives. Billing limits are set per organization, not in the inbox. */
+export const SPEND_CAP =
+  "You can of course configure a cap in your organization's billing settings.";
