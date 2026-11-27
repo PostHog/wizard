@@ -3,7 +3,7 @@ type: report
 flow: integration-v2
 label: Write the setup report
 sink: true
-model_pi: openai/gpt-5.6-terra
+model_pi: openai/gpt-6.2-sol
 effort_pi: low
 model_sdk: claude-sonnet-5
 effort_sdk: high

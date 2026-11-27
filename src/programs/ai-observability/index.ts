@@ -1,43 +1,15 @@
-import { Harness, Sequence, GPT5_6_TERRA_MODEL } from '@shared/constants';
+import { Harness, Sequence, GPT6_2_SOL_MODEL } from '@shared/constants';
 import type { ProgramConfig } from '@programs/program-contract';
 import { headlessOption, regionOption } from '@shared/headless-mode';
+import { detectUnambiguousAioSkill } from './detect-skill';
 
 const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';
+const AI_OBSERVABILITY_DOCS_URL = 'https://posthog.com/docs/ai-observability';
 
-/**
- * `wizard ai-observability` — wrap the project's LLM client calls so they emit
- * `$ai_generation` events into AI Observability.
- *
- * No `run.skillId`: the context-mill `ai-observability` group ships one variant
- * per (LLM provider × language) and the wizard does no provider detection —
- * the agent loads the menu, matches the manifest's vendor SDK, and installs
- * the right variant itself (see `customPrompt`). Stays flat while a single
- * "add AIO to a project" flow is the only action.
- */
-export const config: ProgramConfig = {
-  rankWith: ['decisions'],
-  decisions: ['calls_llm_api'],
-  binding: {
-    sequence: Sequence.linear,
-    harness: Harness.pi,
-    model: GPT5_6_TERRA_MODEL,
-    thinkingLevel: 'high',
-  },
-  command: 'ai-observability',
-  description: 'Add PostHog AI Observability to your LLM calls',
-  id: 'ai-observability',
-  sdkFeature: 'aiObservability',
-  cliOptions: { ...headlessOption, ...regionOption },
-  reportFile: AI_OBSERVABILITY_REPORT_FILE,
-  run: {
-    integrationLabel: 'ai-observability',
-    // No `skillId`: linear.ts skips its pre-install step (see the gate on
-    // `linear.ts:47`), so the agent must load the menu and install the right
-    // variant itself. The prompt below tells it how.
-    customPrompt:
-      () => `Instrument this project's LLM calls with PostHog AI Observability.
-
-This flow has no pre-installed skill — you install the right one yourself:
+function buildAioPrompt(preinstalledSkillId?: string): string {
+  const skillStep = preinstalledSkillId
+    ? `Skill \`${preinstalledSkillId}\` was pre-installed for you at the skill path below. Read its \`SKILL.md\` and references directly — skip \`load_skill_menu\` and \`install_skill\` unless inspecting the code shows a different variant (such as a gateway \`baseURL\` override or a framework wrapping the calls) applies.`
+    : `This flow has no pre-installed skill — you install the right one yourself:
 
 1. Call \`load_skill_menu\` with \`category: "ai-observability"\`. The menu is
    the source of truth: one variant per (LLM provider × language), plus a
@@ -52,15 +24,58 @@ This flow has no pre-installed skill — you install the right one yourself:
 
 3. Call \`install_skill\` with the picked variant id. Then follow that skill's
    \`SKILL.md\` and references end-to-end. The skill itself will install
-   packages, wire OTel, set env vars, and describe verification.
+   packages, wire OTel, set env vars, and describe verification.`;
+
+  return `Instrument this project's LLM calls with PostHog AI Observability.
+
+${skillStep}
 
 Make only additive changes — do not touch existing PostHog init, identify
-calls, event capture, or dashboards. Those belong to other skills. The
-final report is written to ./${AI_OBSERVABILITY_REPORT_FILE}.`,
-    successMessage: `AI Observability configured! View the report at ./${AI_OBSERVABILITY_REPORT_FILE}`,
-    reportFile: AI_OBSERVABILITY_REPORT_FILE,
-    docsUrl: 'https://posthog.com/docs/ai-observability',
-    spinnerMessage: 'Setting up AI Observability...',
-    estimatedDurationMinutes: 5,
+calls, event capture, or dashboards. Those belong to other skills. Keep every
+existing dependency in the project manifest at its current version (never
+upgrade an already-installed package or vendor SDK). Instrument only the
+production application's LLM calls — leave developer tooling such as
+benchmarks, evals, and model comparison scripts untouched. The final report
+is written to ./${AI_OBSERVABILITY_REPORT_FILE}.`;
+}
+
+/**
+ * `wizard ai-observability` — wrap the project's LLM client calls so they emit
+ * `$ai_generation` events into AI Observability.
+ *
+ * Pre-installs the `ai-observability-*` variant when the root manifest has a
+ * single unambiguous framework or provider (skipping the runtime menu + install
+ * round-trip); falls back to runtime discovery on ambiguous, multi-provider,
+ * gateway, or monorepo projects.
+ */
+export const config: ProgramConfig = {
+  rankWith: ['decisions'],
+  decisions: ['calls_llm_api'],
+  binding: {
+    sequence: Sequence.linear,
+    harness: Harness.pi,
+    model: GPT6_2_SOL_MODEL,
+    thinkingLevel: 'low',
+  },
+  command: 'ai-observability',
+  description: 'Add PostHog AI Observability to your LLM calls',
+  id: 'ai-observability',
+  sdkFeature: 'aiObservability',
+  cliOptions: { ...headlessOption, ...regionOption },
+  reportFile: AI_OBSERVABILITY_REPORT_FILE,
+  docsUrl: AI_OBSERVABILITY_DOCS_URL,
+  run: (session) => {
+    const skillId = detectUnambiguousAioSkill(session.installDir);
+    return Promise.resolve({
+      integrationLabel: 'ai-observability',
+      ...(skillId && { skillId, optionalSkill: true }),
+      customPrompt: (ctx) =>
+        buildAioPrompt(ctx.skillPath ? skillId : undefined),
+      successMessage: `AI Observability configured! View the report at ./${AI_OBSERVABILITY_REPORT_FILE}`,
+      reportFile: AI_OBSERVABILITY_REPORT_FILE,
+      docsUrl: AI_OBSERVABILITY_DOCS_URL,
+      spinnerMessage: 'Setting up AI Observability...',
+      estimatedDurationMinutes: 5,
+    });
   },
 };

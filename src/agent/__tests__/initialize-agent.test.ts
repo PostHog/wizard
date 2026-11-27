@@ -1,9 +1,12 @@
 import {
   BASE_ALLOWED_TOOLS,
+  TaskTool,
   initializeAgent,
+  resolveRunToolLists,
   type AgentConfig,
 } from '@agent/agent-interface';
 import { WIZARD_TOOL_NAMES, createWizardToolsServer } from '@agent/tools';
+import { Sequence } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import type { WizardRunOptions } from '@utils/types';
 
@@ -83,4 +86,22 @@ it('leaves publish_program_result out of the tools every program gets', () => {
   expect(BASE_ALLOWED_TOOLS).not.toContain(
     WIZARD_TOOL_NAMES.publishProgramResult,
   );
+});
+
+it('removes linear Task* tools on orchestrator runs while keeping them on linear runs', () => {
+  const orch = resolveRunToolLists({
+    sequence: Sequence.orchestrator,
+    disallowedTools: ['enqueue_task'],
+  });
+  for (const tool of Object.values(TaskTool)) {
+    expect(orch.allowedTools).not.toContain(tool);
+    expect(orch.disallowedTools).toContain(tool);
+  }
+  expect(orch.disallowedTools).toContain('enqueue_task');
+
+  const linear = resolveRunToolLists({ sequence: Sequence.linear });
+  for (const tool of Object.values(TaskTool)) {
+    expect(linear.allowedTools).toContain(tool);
+    expect(linear.disallowedTools).not.toContain(tool);
+  }
 });

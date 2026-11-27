@@ -85,10 +85,16 @@ async function executeLinear(
     );
     if (signal?.aborted) return aborted();
     if (installResult.kind !== 'ok') {
-      return failed(installFailure(run.integrationLabel, installResult));
+      if (!run.optionalSkill) {
+        return failed(installFailure(run.integrationLabel, installResult));
+      }
+      logToFile(
+        `[agent-runner] optional skill ${run.skillId} install failed (${installResult.kind}); falling back to runtime discovery`,
+      );
+    } else {
+      skillPath = installResult.path;
+      logToFile(`[agent-runner] skill installed at ${skillPath}`);
     }
-    skillPath = installResult.path;
-    logToFile(`[agent-runner] skill installed at ${skillPath}`);
   }
 
   let sdkSkillPaths: string[] = [];

@@ -238,6 +238,7 @@ async function main(
       store.session.debug && errorStack ? `\n\n${errorStack}` : '';
     const docsUrl =
       store.session.frameworkConfig?.metadata.docsUrl ??
+      config.docsUrl ??
       (typeof config.run === 'object' ? config.run.docsUrl : undefined) ??
       POSTHOG_DOCS_URL;
     // A coded failure is a decision with its own message; anything else is

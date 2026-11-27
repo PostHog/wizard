@@ -53,6 +53,8 @@ export interface AgentRunDefinition {
   integrationLabel: string;
   /** Skill ID to pre-install. Omit for agent-driven skill discovery. */
   skillId?: string;
+  /** When true, a failed pre-install logs and falls back to runtime discovery instead of aborting. */
+  optionalSkill?: boolean;
   /** Additional program-specific prompt instructions. Appended after the default project prompt. */
   customPrompt?: (ctx: PromptContext) => string;
   prompt?: (ctx: PromptContext) => string; // replaces the assembled project prompt; linear

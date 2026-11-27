@@ -112,6 +112,19 @@ describe('walkProjectFiles', () => {
     expect(walkProjectFiles(root, vi.fn())).toBe(true);
   });
 
+  it('marks a depth-truncated walk incomplete only when incompleteOnDepthLimit is set', () => {
+    fs.mkdirSync(path.join(root, 'a', 'b', 'c'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'a', 'b', 'c', 'deep.ts'), '');
+
+    expect(walkProjectFiles(root, vi.fn(), 1)).toBe(true);
+    expect(
+      walkProjectFiles(root, vi.fn(), 1, { incompleteOnDepthLimit: true }),
+    ).toBe(false);
+    expect(
+      walkProjectFiles(root, vi.fn(), 3, { incompleteOnDepthLimit: true }),
+    ).toBe(true);
+  });
+
   it('reports a walk that skipped a directory it could not open as partial', () => {
     const opendirSync = fs.opendirSync;
     vi.spyOn(fs, 'opendirSync').mockImplementation((dir, options) => {

@@ -4,8 +4,8 @@ flow: integration-v2
 label: Verify and review the integration
 timeoutSeconds: 600
 onTimeout: continue
-model_pi: openai/gpt-5.6-sol
-effort_pi: medium
+model_pi: openai/gpt-6.2-sol
+effort_pi: low
 model_sdk: claude-sonnet-5
 effort_sdk: high
 skills: [posthog-best-practices, integration-build]

@@ -35,7 +35,7 @@ import type {
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
 import {
-  GPT5_6_SOL_MODEL,
+  GPT6_2_SOL_MODEL,
   Harness,
   SETUP_REPORT_FILE,
   Sequence,
@@ -324,8 +324,8 @@ export const config: ProgramConfig = {
   binding: {
     sequence: Sequence.orchestrator,
     harness: Harness.pi,
-    model: GPT5_6_SOL_MODEL,
-    thinkingLevel: 'medium',
+    model: GPT6_2_SOL_MODEL,
+    thinkingLevel: 'low',
   },
   agentFlow: 'integration-v2',
   agentPrompts: () => import('./agent-prompts').then((m) => m.AGENT_PROMPTS),

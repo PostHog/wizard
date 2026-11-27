@@ -284,6 +284,12 @@ export interface ProgramConfig {
    */
   reportFile?: string;
   /**
+   * Documentation URL for manual setup fallback. Mirrors `run.docsUrl` at the
+   * top level so error screens, headless aborts, and spellbooks can read it
+   * synchronously when `run` is a function.
+   */
+  docsUrl?: string;
+  /**
    * Agent-authored event-plan artifact to mirror into the wizard session.
    * Relative to `session.installDir`. Programs that do not produce an event
    * plan leave this unset, so generic runner machinery does not inspect a

@@ -11,7 +11,7 @@
   "variations": [
     {
       "name": "default",
-      "summary": "linear / pi / terra-high — parity with main"
+      "summary": "linear / pi / gpt-6.2-sol-low"
     }
   ],
   "path": [

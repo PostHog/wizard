@@ -49,7 +49,7 @@ describe('commandments by axis', () => {
       'never reach an orchestrator task on %s',
       (harness) => {
         expect(prompt(harness, Sequence.orchestrator)).not.toMatch(
-          /TaskUpdate|TaskCreate|Task tools|task list/,
+          /TaskUpdate|TaskCreate|TaskGet|TaskList|Task tools|task list/i,
         );
       },
     );
