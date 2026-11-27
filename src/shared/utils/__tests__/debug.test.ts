@@ -33,10 +33,12 @@ describe('log file writing', () => {
     expect(tail).toContain('line 699');
   });
 
-  it('keeps the end of a single line longer than the tail', () => {
+  it('leaves out a single line longer than the tail, so no unlabelled secret survives', () => {
     configureLogFile({ path: path.join(tmpRoot, 'w.log'), enabled: true });
-    logToFile(`huge ${'y'.repeat(70 * 1024)} end-marker`);
-    expect(getProcessLogTail()).toContain('end-marker');
+    logToFile(`PASSWORD=${'y'.repeat(70 * 1024)}`);
+    const tail = getProcessLogTail();
+    expect(tail).toContain('log line over 64K left out');
+    expect(tail).not.toContain('yyyy');
   });
 
   it('creates a missing log directory instead of dropping the log', () => {

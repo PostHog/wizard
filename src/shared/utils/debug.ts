@@ -72,6 +72,7 @@ function reportLogFailureOnce(err: unknown): void {
 
 // Every run appends to one shared file, so a failure report reads this process's own lines from memory.
 const PROCESS_LOG_TAIL_CHARS = 64 * 1024;
+const OVERSIZED_LINE_NOTE = '[log line over 64K left out]\n';
 let processLogTail = '';
 
 export function getProcessLogTail(): string {
@@ -83,11 +84,11 @@ function keepInProcessTail(text: string): void {
   if (processLogTail.length <= PROCESS_LOG_TAIL_CHARS) return;
   const kept = processLogTail.slice(-PROCESS_LOG_TAIL_CHARS);
   const firstBreak = kept.indexOf('\n');
-  // A single line longer than the cap has its only break at the end; keep its tail rather than nothing.
+  // A cut line can keep a secret's value without the name that gets it masked, so a line too long to keep whole is left out.
   processLogTail =
     firstBreak >= 0 && firstBreak < kept.length - 1
       ? kept.slice(firstBreak + 1)
-      : kept;
+      : OVERSIZED_LINE_NOTE;
 }
 
 // The log's directory isn't guaranteed to exist (Windows %TEMP%,
