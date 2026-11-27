@@ -49,6 +49,11 @@ import { getDetectedWarehouseSources } from '@services/warehouse-sources';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../shared/program-scopes';
+import {
+  webAnalyticsExcludedTypes,
+  webAnalyticsFacts,
+  webAnalyticsSeedTasks,
+} from './web-analytics/seed.js';
 
 const WAREHOUSE_SOURCES_DOCS_URL =
   'https://posthog.com/docs/data-warehouse/sources';
@@ -303,6 +308,7 @@ const warehouseSeedTasks: NonNullable<ProgramConfig['seedTasks']> = (sess) => {
 };
 
 export { EVENT_PLAN_FILE } from './constants.js';
+export { WIZARD_WEB_ANALYTICS_SETUP_FLAG_KEY } from './web-analytics/seed.js';
 export {
   EmailProviderOfferAnswer,
   emailProviderOffer,
@@ -342,7 +348,11 @@ export const config: ProgramConfig = {
   // warehouse pair that call 403s on a token the user already granted.
   oauthScopeAdditions: [...WAREHOUSE_SOURCE_SCOPE_ADDITIONS],
 
-  seedTasks: warehouseSeedTasks,
+  // Consent notices show in this order: warehouse first, then web analytics.
+  seedTasks: (sess) => [
+    ...warehouseSeedTasks(sess),
+    ...webAnalyticsSeedTasks(sess),
+  ],
   decisions: [
     'framework',
     'is_monorepo',
@@ -362,15 +372,18 @@ export const config: ProgramConfig = {
       ? ['ai-observability', 'logs']
       : []),
     ...(mcpAnalyticsStepOn(flags, sess) ? [] : [MCP_ANALYTICS_TASK_TYPE]),
+    ...webAnalyticsExcludedTypes(flags),
     ...SDK_FEATURE_TASKS.filter(([, feature]) =>
       sdkFeatureGaps(sess, [feature]).some((gap) => gap.blocking),
     ).map(([type]) => type),
   ],
   // The fact exists only beside the task, so no other task acts on it alone.
-  detectedFacts: (flags, sess) =>
-    mcpAnalyticsStepOn(flags, sess)
+  detectedFacts: (flags, sess) => [
+    ...(mcpAnalyticsStepOn(flags, sess)
       ? [mcpServerFact(sess.mcpServerCandidates)]
-      : [],
+      : []),
+    ...webAnalyticsFacts(flags, sess),
+  ],
 
   // CI-mode prerequisite work: the headless equivalent of the detect step's
   // onReady hook. Auto-detect the framework, then gather context.

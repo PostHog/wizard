@@ -11,7 +11,10 @@ import {
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
 } from '@shared/constants';
-import { config as posthogIntegration } from '@programs/posthog-integration';
+import {
+  config as posthogIntegration,
+  WIZARD_WEB_ANALYTICS_SETUP_FLAG_KEY,
+} from '@programs/posthog-integration';
 import { buildSession } from '@services/session';
 import { analytics } from '@utils/analytics';
 import { promptFor } from './helpers/integration-prompt.no-jest';
@@ -70,7 +73,11 @@ describe('default observability flag gating', () => {
   // A project with a server and the MCP flag on, so the MCP step's own gate stays out of these cases.
   const excluded = (flags: Record<string, string>) =>
     posthogIntegration.excludedTaskTypes!(
-      { [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'true', ...flags },
+      {
+        [WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY]: 'true',
+        [WIZARD_WEB_ANALYTICS_SETUP_FLAG_KEY]: 'true',
+        ...flags,
+      },
       sessionWithServers(['src/server.ts']),
     );
 

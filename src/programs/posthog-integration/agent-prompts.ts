@@ -10,6 +10,7 @@ import mcpAnalytics from './agent/mcp-analytics.md';
 import report from './agent/report.md';
 import review from './agent/review.md';
 import warehouse from './agent/warehouse.md';
+import webAnalytics from './agent/web-analytics.md';
 
 /** This program's agent prompts by task type, imported as text, in the order tasks that can start together are queued. */
 export const AGENT_PROMPTS: Readonly<Record<string, string>> = {
@@ -25,4 +26,5 @@ export const AGENT_PROMPTS: Readonly<Record<string, string>> = {
   dashboard,
   report,
   warehouse,
+  'web-analytics': webAnalytics,
 };
