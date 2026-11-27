@@ -156,8 +156,16 @@ export type PosthogSdkSummary = {
   detected_sdks: string[];
 };
 
-const EXACT_PIN_SPEC =
-  /^(?:(?:==|=)\s?v?\d+(?:\.\d+){1,2}|v?\d+\.\d+\.\d+)(?:[-+.a-zA-Z0-9]+)?$/;
+const EXPLICIT_EXACT_PIN_SPEC =
+  /^(?:==|=)\s?v?\d+(?:\.\d+){1,2}(?:[-+.a-zA-Z0-9]+)?$/;
+const BARE_EXACT_PIN_SPEC = /^v?\d+\.\d+\.\d+(?:[-+.a-zA-Z0-9]+)?$/;
+
+function isExactPin(trimmedSpec: string, ecosystem: string): boolean {
+  if (trimmedSpec.length > 64) return false;
+  if (EXPLICIT_EXACT_PIN_SPEC.test(trimmedSpec)) return true;
+  // Cargo treats bare `x.y.z` as a caret requirement (`^x.y.z`), not an exact pin.
+  return ecosystem !== 'cargo' && BARE_EXACT_PIN_SPEC.test(trimmedSpec);
+}
 
 /** Summarize every PostHog SDK across `manifests` (all ecosystems, including unversioned entries) without paths or raw specs. */
 export function summarizePosthogSdks(
@@ -192,12 +200,14 @@ export function summarizePosthogSdks(
           throw new RangeError('Major version exceeds safe integer');
         }
         const trimmed = spec.trim();
-        const pinKind: Exclude<SdkVersionPin, 'mixed'> =
-          trimmed.length <= 64 && EXACT_PIN_SPEC.test(trimmed)
-            ? 'exact'
-            : intersects(range, `>=${nextMajor}.0.0`)
-            ? 'wide_range'
-            : 'major_range';
+        const pinKind: Exclude<SdkVersionPin, 'mixed'> = isExactPin(
+          trimmed,
+          manifest.ecosystem,
+        )
+          ? 'exact'
+          : intersects(range, `>=${nextMajor}.0.0`)
+          ? 'wide_range'
+          : 'major_range';
         versions.add(`${sdkId}@${majorPart}.${minorPart}`);
         pinKinds.add(pinKind);
       } catch {

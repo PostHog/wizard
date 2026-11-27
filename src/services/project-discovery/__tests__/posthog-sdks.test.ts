@@ -247,6 +247,34 @@ describe('PostHog SDK versions', () => {
       summarizePosthogSdks([
         {
           dir: '.',
+          path: 'Cargo.toml',
+          ecosystem: 'cargo',
+          packages: ['posthog-rs'],
+          versions: { 'posthog-rs': '0.3.5' },
+        },
+      ]),
+    ).toMatchObject({
+      sdk_version_found: 'cargo:posthog-rs@0.3',
+      sdk_version_pin: 'major_range',
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'Cargo.toml',
+          ecosystem: 'cargo',
+          packages: ['posthog-rs'],
+          versions: { 'posthog-rs': '=0.3.5' },
+        },
+      ]),
+    ).toMatchObject({
+      sdk_version_found: 'cargo:posthog-rs@0.3',
+      sdk_version_pin: 'exact',
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
           path: 'package.json',
           ecosystem: 'npm',
           packages: ['posthog-node'],
