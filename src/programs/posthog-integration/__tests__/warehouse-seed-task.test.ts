@@ -16,6 +16,7 @@ vi.mock('@utils/analytics', () => ({
 }));
 
 import { config as posthogIntegration } from '@programs/posthog-integration';
+import { buildSession } from '@services/session';
 import { DETECTED_WAREHOUSE_SOURCES_KEY } from '@services/warehouse-sources';
 
 const POSTGRES: DetectedSource = {
@@ -27,8 +28,7 @@ const POSTGRES: DetectedSource = {
 
 function session(over: Partial<WizardSession> = {}): WizardSession {
   return {
-    installDir: '/tmp/app',
-    frameworkContext: {},
+    ...buildSession({ installDir: '/tmp/app' }),
     ...over,
   } as WizardSession;
 }
