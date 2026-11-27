@@ -6,11 +6,12 @@
  *    (default 120s) without a chunk — catches hangs even when the user hits
  *    Ctrl+C before the gateway's 600s request deadline.
  * 2. `stage: 'failed'` when a turn ends on a mid-stream deadline/drop error
- *    (or any error after crossing the silence threshold).
+ *    (or any error after crossing the silence threshold) and Pi is not going to
+ *    auto-retry it (or retries end without recovering).
  *
- * If a turn that triggered `silent` later finishes or is cancelled, a follow-up
- * `stage: 'recovered'` or `stage: 'aborted'` event closes the loop so dashboards
- * can separate real hangs from slow reasoning turns.
+ * If a turn that triggered `silent` later finishes (including on a retry) or is
+ * cancelled, a follow-up `stage: 'recovered'` or `stage: 'aborted'` event closes
+ * the loop so dashboards can separate real hangs from slow reasoning turns.
  */
 
 import { analytics } from '@utils/analytics';
@@ -30,7 +31,20 @@ export type StreamStallErrorKind =
   | 'connection_reset'
   | 'other';
 
-type TurnState = 'idle' | 'waiting' | 'paused' | 'failed';
+type TurnState =
+  | 'idle'
+  | 'waiting'
+  | 'paused'
+  | 'pending_error'
+  | 'retrying'
+  | 'failed';
+
+interface PendingFailure {
+  errorKind: StreamStallErrorKind;
+  errorMessage?: string;
+  idleMs: number;
+  turnElapsedMs: number;
+}
 
 export interface StreamStallWatcherOptions {
   sequence: Sequence;
@@ -48,6 +62,8 @@ export interface StreamStallEvent {
   message?: unknown;
   success?: boolean;
   aborted?: boolean;
+  willRetry?: boolean;
+  finalError?: string;
 }
 
 interface AssistantMessageShape {
@@ -108,6 +124,7 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
   let chunksReceived = 0;
   let streamOpened = false;
   let silentReported = false;
+  let pendingFailure: PendingFailure | undefined;
 
   const clearTimer = () => {
     if (timer !== undefined) {
@@ -124,16 +141,25 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
     chunksReceived = 0;
     streamOpened = false;
     silentReported = false;
+    pendingFailure = undefined;
   };
 
   const report = (
     stage: StreamStallStage,
-    extra?: { errorKind?: StreamStallErrorKind; errorMessage?: string },
+    extra?: {
+      errorKind?: StreamStallErrorKind;
+      errorMessage?: string;
+      idleMs?: number;
+      turnElapsedMs?: number;
+    },
   ) => {
     const ts = now();
-    const idleMs = turnStartedAt > 0 ? Math.max(0, ts - lastActivityAt) : 0;
+    const idleMs =
+      extra?.idleMs ??
+      (turnStartedAt > 0 ? Math.max(0, ts - lastActivityAt) : 0);
     const turnElapsedMs =
-      turnStartedAt > 0 ? Math.max(0, ts - turnStartedAt) : 0;
+      extra?.turnElapsedMs ??
+      (turnStartedAt > 0 ? Math.max(0, ts - turnStartedAt) : 0);
     const truncatedError = extra?.errorMessage
       ? redactSecrets(extra.errorMessage).slice(0, 200)
       : undefined;
@@ -170,6 +196,14 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
     });
   };
 
+  const flushPendingFailure = () => {
+    if (!pendingFailure) return;
+    const failure = pendingFailure;
+    pendingFailure = undefined;
+    turnState = 'failed';
+    report('failed', failure);
+  };
+
   const armTimer = () => {
     clearTimer();
     if (
@@ -195,6 +229,7 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
 
       switch (event.type) {
         case 'turn_start': {
+          const continuingRetry = turnState === 'retrying';
           turnNumber += 1;
           turnState = 'waiting';
           turnStartedAt = now();
@@ -202,7 +237,10 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
           turnStartActiveSessions = activePiSessions;
           chunksReceived = 0;
           streamOpened = false;
-          silentReported = false;
+          if (!continuingRetry) {
+            silentReported = false;
+            pendingFailure = undefined;
+          }
           armTimer();
           break;
         }
@@ -225,8 +263,11 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
           const msg = event.message as AssistantMessageShape | undefined;
           if (msg?.role !== 'assistant') break;
           clearTimer();
+          const ts = now();
           const idleMs =
-            turnStartedAt > 0 ? Math.max(0, now() - lastActivityAt) : 0;
+            turnStartedAt > 0 ? Math.max(0, ts - lastActivityAt) : 0;
+          const turnElapsedMs =
+            turnStartedAt > 0 ? Math.max(0, ts - turnStartedAt) : 0;
 
           if (msg.stopReason === 'error') {
             const errorKind = classifyStreamStallError(msg.errorMessage);
@@ -235,11 +276,14 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
               silentReported ||
               (thresholdMs > 0 && idleMs >= thresholdMs)
             ) {
-              turnState = 'failed';
-              report('failed', {
+              // Hold the report until agent_end tells us whether Pi will auto-retry.
+              pendingFailure = {
                 errorKind: errorKind ?? 'other',
                 errorMessage: msg.errorMessage,
-              });
+                idleMs,
+                turnElapsedMs,
+              };
+              turnState = 'pending_error';
             } else {
               resetToIdle();
             }
@@ -256,22 +300,36 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
           }
           break;
         }
-        case 'auto_retry_start':
-        case 'compaction_start': {
-          if (turnState === 'waiting') {
+        case 'auto_retry_start': {
+          if (
+            turnState === 'waiting' ||
+            turnState === 'pending_error' ||
+            turnState === 'retrying'
+          ) {
             clearTimer();
-            turnState = 'paused';
+            turnState = 'retrying';
           }
           break;
         }
         case 'auto_retry_end': {
-          if (turnState !== 'paused') break;
           if (event.success === false) {
-            resetToIdle();
-          } else {
+            if (pendingFailure) {
+              flushPendingFailure();
+            } else if (turnState !== 'failed') {
+              resetToIdle();
+            }
+          } else if (turnState === 'retrying') {
+            pendingFailure = undefined;
             turnState = 'waiting';
             lastActivityAt = now();
             armTimer();
+          }
+          break;
+        }
+        case 'compaction_start': {
+          if (turnState === 'waiting') {
+            clearTimer();
+            turnState = 'paused';
           }
           break;
         }
@@ -287,10 +345,17 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
           break;
         }
         case 'agent_end': {
-          if (turnState !== 'failed') {
-            resetToIdle();
-          } else {
+          if (turnState === 'pending_error' && pendingFailure) {
+            if (event.willRetry) {
+              clearTimer();
+              turnState = 'retrying';
+            } else {
+              flushPendingFailure();
+            }
+          } else if (turnState === 'failed') {
             clearTimer();
+          } else {
+            resetToIdle();
           }
           break;
         }
@@ -304,6 +369,7 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
       clearTimer();
       const errorKind = classifyStreamStallError(errorMessage);
       if (errorKind !== undefined || silentReported) {
+        pendingFailure = undefined;
         turnState = 'failed';
         report('failed', {
           errorKind: errorKind ?? 'other',
@@ -315,12 +381,18 @@ export function createStreamStallWatcher(opts: StreamStallWatcherOptions) {
     dispose(disposeOpts?: { cancelled?: boolean }): void {
       if (disposed) return;
       clearTimer();
-      if (
-        disposeOpts?.cancelled &&
-        (turnState === 'waiting' || turnState === 'paused') &&
-        silentReported
-      ) {
-        report('aborted');
+      if (disposeOpts?.cancelled) {
+        if (
+          (turnState === 'waiting' ||
+            turnState === 'paused' ||
+            turnState === 'retrying' ||
+            turnState === 'pending_error') &&
+          silentReported
+        ) {
+          report('aborted');
+        }
+      } else if (turnState === 'pending_error' && pendingFailure) {
+        flushPendingFailure();
       }
       resetToIdle();
       disposed = true;

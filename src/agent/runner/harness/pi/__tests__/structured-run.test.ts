@@ -183,6 +183,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
                 content: [],
               },
             });
+            state.listener?.({ type: 'agent_end', willRetry: false });
             return Promise.resolve();
           }
           if (!state.noTools)

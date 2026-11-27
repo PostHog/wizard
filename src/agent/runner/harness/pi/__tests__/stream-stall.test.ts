@@ -139,6 +139,7 @@ describe('createStreamStallWatcher', () => {
         errorMessage: 'request deadline exceeded mid-stream',
       },
     });
+    watcher.onEvent({ type: 'agent_end', willRetry: false });
 
     expect(analytics.wizardCapture).toHaveBeenCalledTimes(2);
     expect(analytics.wizardCapture).toHaveBeenLastCalledWith(
@@ -170,7 +171,7 @@ describe('createStreamStallWatcher', () => {
     );
   });
 
-  it('emits failed immediately on mid-stream drops even before 120s, and ignores non-stall errors', () => {
+  it('emits failed on mid-stream drops once agent_end confirms no retry, and ignores non-stall errors', () => {
     const watcher = createWatcher();
 
     watcher.onEvent({ type: 'turn_start' });
@@ -183,6 +184,7 @@ describe('createStreamStallWatcher', () => {
         errorMessage: '401 authentication_error',
       },
     });
+    watcher.onEvent({ type: 'agent_end', willRetry: false });
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
 
     watcher.onEvent({ type: 'turn_start' });
@@ -196,6 +198,10 @@ describe('createStreamStallWatcher', () => {
         errorMessage: 'upstream closed the stream',
       },
     });
+    // Held until agent_end reports whether Pi will retry.
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+
+    watcher.onEvent({ type: 'agent_end', willRetry: false });
     expect(analytics.wizardCapture).toHaveBeenCalledTimes(1);
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       STREAM_STALL_EVENT,
@@ -315,19 +321,174 @@ describe('createStreamStallWatcher', () => {
     );
   });
 
-  it('clears paused state when compaction_end or auto_retry_end ends unsuccessfully', () => {
+  it('clears paused state when compaction_end aborts', () => {
     const watcher = createWatcher();
     watcher.onEvent({ type: 'turn_start' });
     watcher.onEvent({ type: 'compaction_start' });
     watcher.onEvent({ type: 'compaction_end', aborted: true });
     vi.advanceTimersByTime(DEFAULT_STREAM_SILENCE_MS * 2);
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
+  });
 
+  it('suppresses failed when Pi auto-retries a drop and recovers on the retry', () => {
+    const watcher = createWatcher();
     watcher.onEvent({ type: 'turn_start' });
+    watcher.onEvent({ type: 'message_start', message: { role: 'assistant' } });
+    vi.advanceTimersByTime(8_000);
+    watcher.onEvent({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        stopReason: 'error',
+        errorMessage: 'upstream connection lost',
+      },
+    });
+    watcher.onEvent({ type: 'agent_end', willRetry: true });
     watcher.onEvent({ type: 'auto_retry_start' });
-    watcher.onEvent({ type: 'auto_retry_end', success: false });
+
+    // Backoff sleep must not trigger silence or emit a premature failed event.
     vi.advanceTimersByTime(DEFAULT_STREAM_SILENCE_MS * 2);
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
+
+    // Retry attempt succeeds: Pi emits message_end then auto_retry_end(success: true).
+    watcher.onEvent({ type: 'turn_start' });
+    watcher.onEvent({ type: 'message_start', message: { role: 'assistant' } });
+    vi.advanceTimersByTime(5_000);
+    watcher.onEvent({
+      type: 'message_end',
+      message: { role: 'assistant', stopReason: 'stop' },
+    });
+    watcher.onEvent({ type: 'auto_retry_end', success: true });
+    watcher.onEvent({ type: 'agent_end', willRetry: false });
+
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+  });
+
+  it('emits recovered (not failed) when a silent turn drops and Pi recovers on retry', () => {
+    const watcher = createWatcher();
+    watcher.onEvent({ type: 'turn_start' });
+    vi.advanceTimersByTime(DEFAULT_STREAM_SILENCE_MS);
+    expect(analytics.wizardCapture).toHaveBeenCalledTimes(1);
+    expect(analytics.wizardCapture).toHaveBeenLastCalledWith(
+      STREAM_STALL_EVENT,
+      expect.objectContaining({ stage: 'silent' }),
+    );
+
+    vi.advanceTimersByTime(30_000);
+    watcher.onEvent({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        stopReason: 'error',
+        errorMessage: 'socket hang up',
+      },
+    });
+    watcher.onEvent({ type: 'agent_end', willRetry: true });
+    watcher.onEvent({ type: 'auto_retry_start' });
+    expect(analytics.wizardCapture).toHaveBeenCalledTimes(1);
+
+    // Retry succeeds and closes the silent loop with recovered.
+    watcher.onEvent({ type: 'turn_start' });
+    watcher.onEvent({ type: 'message_start', message: { role: 'assistant' } });
+    vi.advanceTimersByTime(5_000);
+    watcher.onEvent({
+      type: 'message_end',
+      message: { role: 'assistant', stopReason: 'stop' },
+    });
+    watcher.onEvent({ type: 'auto_retry_end', success: true });
+    watcher.onEvent({ type: 'agent_end', willRetry: false });
+
+    expect(analytics.wizardCapture).toHaveBeenCalledTimes(2);
+    expect(analytics.wizardCapture).toHaveBeenNthCalledWith(
+      2,
+      STREAM_STALL_EVENT,
+      expect.objectContaining({ stage: 'recovered' }),
+    );
+  });
+
+  it('emits failed once when Pi exhausts retries on a mid-stream drop', () => {
+    const watcher = createWatcher();
+
+    // Attempt 1: retried by Pi.
+    watcher.onEvent({ type: 'turn_start' });
+    vi.advanceTimersByTime(8_000);
+    watcher.onEvent({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        stopReason: 'error',
+        errorMessage: 'upstream connection lost',
+      },
+    });
+    watcher.onEvent({ type: 'agent_end', willRetry: true });
+    watcher.onEvent({ type: 'auto_retry_start' });
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+
+    // Attempt 2: final failure, Pi emits agent_end(willRetry: false) then auto_retry_end(success: false).
+    watcher.onEvent({ type: 'turn_start' });
+    vi.advanceTimersByTime(10_000);
+    watcher.onEvent({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        stopReason: 'error',
+        errorMessage: 'upstream connection lost',
+      },
+    });
+    expect(analytics.wizardCapture).not.toHaveBeenCalled();
+
+    watcher.onEvent({ type: 'agent_end', willRetry: false });
+    watcher.onEvent({
+      type: 'auto_retry_end',
+      success: false,
+      finalError: 'upstream connection lost',
+    });
+
+    expect(analytics.wizardCapture).toHaveBeenCalledTimes(1);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      STREAM_STALL_EVENT,
+      expect.objectContaining({
+        stage: 'failed',
+        turn_number: 2,
+        error_kind: 'connection_reset',
+        error_message: 'upstream connection lost',
+        idle_ms: 10_000,
+      }),
+    );
+  });
+
+  it('emits failed on auto_retry_end(success: false) if retry backoff is cancelled before the next attempt', () => {
+    const watcher = createWatcher();
+    watcher.onEvent({ type: 'turn_start' });
+    vi.advanceTimersByTime(8_000);
+    watcher.onEvent({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        stopReason: 'error',
+        errorMessage: 'upstream connection lost',
+      },
+    });
+    watcher.onEvent({ type: 'agent_end', willRetry: true });
+    watcher.onEvent({ type: 'auto_retry_start' });
+    vi.advanceTimersByTime(20_000);
+    watcher.onEvent({
+      type: 'auto_retry_end',
+      success: false,
+      finalError: 'Retry cancelled',
+    });
+    watcher.dispose({ cancelled: true });
+
+    expect(analytics.wizardCapture).toHaveBeenCalledTimes(1);
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      STREAM_STALL_EVENT,
+      expect.objectContaining({
+        stage: 'failed',
+        error_kind: 'connection_reset',
+        error_message: 'upstream connection lost',
+        idle_ms: 8_000,
+      }),
+    );
   });
 
   it('tracks concurrent in-flight Pi sessions accurately across parallel tasks', () => {
@@ -367,6 +528,7 @@ describe('createStreamStallWatcher', () => {
           'upstream closed the stream for phx_secret1234567890abcdef and sk-proj-0123456789abcdefghij',
       },
     });
+    watcher.onEvent({ type: 'agent_end', willRetry: false });
 
     expect(analytics.wizardCapture).toHaveBeenCalledWith(
       STREAM_STALL_EVENT,
@@ -392,6 +554,7 @@ describe('createStreamStallWatcher', () => {
         errorMessage: '401 authentication_error',
       },
     });
+    watcher.onEvent({ type: 'agent_end', willRetry: false });
 
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
   });
@@ -399,6 +562,15 @@ describe('createStreamStallWatcher', () => {
   it('clears silence timer during retry backoff and handles thrown transport errors once', () => {
     const watcher = createWatcher();
     watcher.onEvent({ type: 'turn_start' });
+    watcher.onEvent({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        stopReason: 'error',
+        errorMessage: '429 rate limit exceeded',
+      },
+    });
+    watcher.onEvent({ type: 'agent_end', willRetry: true });
     watcher.onEvent({ type: 'auto_retry_start' });
     vi.advanceTimersByTime(DEFAULT_STREAM_SILENCE_MS * 2);
     expect(analytics.wizardCapture).not.toHaveBeenCalled();
