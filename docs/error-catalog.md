@@ -71,8 +71,8 @@ screen, debug log) keep the full detail.
 | `PHW_CLI_INTERACTIVE_REQUIRED`                 | cli      | command needs an interactive terminal and has no non-interactive fallback                                                                                                                                    | no           |
 | `PHW_ARGS_MISSING_API_KEY`                     | args     | non-interactive run without `--api-key`                                                                                                                                                                      | no           |
 | `PHW_ARGS_MISSING_INSTALL_DIR`                 | args     | non-interactive run without `--install-dir`                                                                                                                                                                  | no           |
-| `PHW_ARGS_MISSING_EMAIL`                       | args     | `--signup` without `--email`                                                                                                                                                                                 | no           |
-| `PHW_ARGS_SIGNUP_PROVISION_FAILED`             | args     | account provisioning failed during signup install                                                                                                                                                            | yes          |
+| `PHW_ARGS_MISSING_EMAIL`                       | args     | no longer emitted: `--signup` without `--email`, before account provisioning was removed                                                                                                                     | no           |
+| `PHW_ARGS_SIGNUP_PROVISION_FAILED`             | args     | no longer emitted: account provisioning failed during signup install, before it was removed                                                                                                                  | yes          |
 | `PHW_AUTH_KEY_TYPE`                            | auth     | key with the wrong type/prefix for the mode (`phc_` project key, unknown prefix)                                                                                                                             | no           |
 | `PHW_AUTH_MISSING_SCOPE`                       | auth     | key or OAuth grant lacks a required scope                                                                                                                                                                    | no           |
 | `PHW_AUTH_REGION_MISMATCH`                     | auth     | resolved gateway region disagrees with the session region                                                                                                                                                    | no           |
@@ -87,6 +87,7 @@ screen, debug log) keep the full detail.
 | `PHW_DETECT_UNSUPPORTED_VERSION`               | detect   | detected framework version below the supported minimum                                                                                                                                                       | no           |
 | `PHW_DETECT_UNSUPPORTED_PLATFORM`              | detect   | platform has no matching skill variant (e.g. replay vision on backend-only)                                                                                                                                  | no           |
 | `PHW_DETECT_NO_POSTHOG_SDK`                    | detect   | program requires an installed PostHog SDK; none found                                                                                                                                                        | no           |
+| `PHW_DETECT_SDK_TOO_OLD`                       | detect   | installed PostHog SDK below the program's minimum version                                                                                                                                                    | no           |
 | `PHW_DETECT_NO_PROJECT_FILES`                  | detect   | no project files for the program to work on                                                                                                                                                                  | no           |
 | `PHW_DETECT_NO_SOURCES`                        | detect   | no data warehouse sources detected                                                                                                                                                                           | no           |
 | `PHW_DETECT_NO_PACKAGE_JSON`                   | detect   | no `package.json` anywhere in the project to scan                                                                                                                                                            | no           |
@@ -113,8 +114,8 @@ screen, debug log) keep the full detail.
 | `PHW_AGENT_ORCHESTRATOR_NO_PLANNER`            | agent    | the flow the orchestrator fetched has no planner prompt                                                                                                                                                      | no           |
 | `PHW_SETTINGS_UNFIXABLE_CONFLICT`              | settings | Claude settings conflict that cannot be auto-neutralized (managed/unwritable)                                                                                                                                | no           |
 | `PHW_INTERNAL_UNHANDLED`                       | internal | catch-all: an unexpected error escaped the pipeline                                                                                                                                                          | yes          |
-| `PHW_GATEWAY_MINT_REFUSED`                      | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program); the server's reason is shown | no |
-| `PHW_GATEWAY_MINT_FAILED`                       | gateway  | the gateway-token mint could not be reached or answered unusably | yes |
+| `PHW_GATEWAY_MINT_REFUSED`                     | gateway  | the gateway-token mint refused this run (blocked, throttled, unlisted program); the server's reason is shown                                                                                                 | no           |
+| `PHW_GATEWAY_MINT_FAILED`                      | gateway  | the gateway-token mint could not be reached or answered unusably                                                                                                                                             | yes          |
 
 Retry advice is guidance for automated hosts (sandbox re-run policies), not a
 guarantee.
@@ -123,8 +124,8 @@ guarantee.
 
 Program detect steps write `{ kind, ...detail }` into
 `session.frameworkContext.detectError`. `detectErrorCode()`
-([`src/programs/program-runner/detect-map.ts`](../src/programs/program-runner/detect-map.ts)) maps `kind`
-→ code, and the whole object — `kind` included — rides along as
+([`src/programs/program-runner/detect-map.ts`](../src/programs/program-runner/detect-map.ts))
+maps `kind` → code, and the whole object — `kind` included — rides along as
 `OutroData.errorDetail`.
 
 `DETECT_CODES` is keyed on `DetectErrorKind`, a union assembled from the
@@ -168,9 +169,9 @@ no distinguishing signal is available. The Pi harness reports every 401 as
 
 1. Add the code to `ErrorCodes` (`codes.ts`) and an entry to `ERROR_CATALOG`
    (`catalog.ts`) — the unit test enforces catalog completeness.
-2. Pass it to `wizardAbort(host, { code })` or `new WizardError(msg, ctx,
-   code)` at the failure site. Prefer explicit `code` over inference so call
-   sites stay greppable. For agent-emitted `[ABORT] <reason>` preconditions,
-   declare `errorCode` on the program's `abortCases` entry so the generic
+2. Pass it to `wizardAbort(host, { code })` or `new WizardError(msg, ctx, code)`
+   at the failure site. Prefer explicit `code` over inference so call sites stay
+   greppable. For agent-emitted `[ABORT] <reason>` preconditions, declare
+   `errorCode` on the program's `abortCases` entry so the generic
    `PHW_AGENT_ABORT` is overridden with the specific class.
 3. Add the row here.

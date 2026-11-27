@@ -108,13 +108,15 @@ function discoverPythonFeatures(
   const depNames: string[] = [];
 
   const requirementsTxt = safeRead(installDir, 'requirements.txt');
-  if (requirementsTxt) depNames.push(...parseRequirementsTxt(requirementsTxt));
+  if (requirementsTxt)
+    depNames.push(...Object.keys(parseRequirementsTxt(requirementsTxt)));
 
   const pyprojectToml = safeRead(installDir, 'pyproject.toml');
-  if (pyprojectToml) depNames.push(...parsePyprojectToml(pyprojectToml));
+  if (pyprojectToml)
+    depNames.push(...Object.keys(parsePyprojectToml(pyprojectToml)));
 
   const pipfile = safeRead(installDir, 'Pipfile');
-  if (pipfile) depNames.push(...parsePipfile(pipfile));
+  if (pipfile) depNames.push(...Object.keys(parsePipfile(pipfile)));
 
   if (depNames.some((depName) => PYTHON_LLM_PACKAGES.has(depName))) {
     features.push(DiscoveredFeature.LLM);

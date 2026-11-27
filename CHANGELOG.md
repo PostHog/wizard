@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.0.0](https://github.com/PostHog/wizard/compare/v2.100.0...v3.0.0) (2026-11-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove --signup ([#1607](https://github.com/PostHog/wizard/issues/1607))
+* sign up in the browser and remove account provisioning ([#1606](https://github.com/PostHog/wizard/issues/1606))
+
+### Features
+
+* **discovery:** offer a project choice when a model source sees several apps ([#1604](https://github.com/PostHog/wizard/issues/1604)) ([c240bf5](https://github.com/PostHog/wizard/commit/c240bf5a5de984d851366de32ed615aa1a6ba967))
+* remove --signup ([#1607](https://github.com/PostHog/wizard/issues/1607)) ([74a40c5](https://github.com/PostHog/wizard/commit/74a40c5eaa8902e6e3f8d35c3b20a1173c3b9bcd))
+* sign up in the browser and remove account provisioning ([#1606](https://github.com/PostHog/wizard/issues/1606)) ([e8b2c0c](https://github.com/PostHog/wizard/commit/e8b2c0c560c9953a08aa857b43141c9b5bb86957))
+
+
+### Bug Fixes
+
+* **error-tracking:** detect React Router 8 modes and pick the uploader from the build script ([#1598](https://github.com/PostHog/wizard/issues/1598)) ([0f9f8db](https://github.com/PostHog/wizard/commit/0f9f8db2f67da4f3d850fce7180cafe6c584d146))
+* **gateway:** send a session id on Pi gateway requests ([#1597](https://github.com/PostHog/wizard/issues/1597)) ([e8f1cdb](https://github.com/PostHog/wizard/commit/e8f1cdbd8aa0ef242a6352701a1c5beb945b664b))
+* **sdks:** follow SDK doc pins for Go, Rust, and KMP and update crate detection ([#1602](https://github.com/PostHog/wizard/issues/1602)) ([b88b1ef](https://github.com/PostHog/wizard/commit/b88b1ef60fd1b9085d0d8bc13ac798040d940700))
+
 ## [2.100.0](https://github.com/PostHog/wizard/compare/v2.99.0...v2.100.0) (2026-11-23)
 
 

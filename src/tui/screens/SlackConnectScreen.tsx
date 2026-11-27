@@ -227,7 +227,6 @@ export const SlackConnectScreen = ({ store }: SlackConnectScreenProps) => {
       try {
         const data = await getOrAskForProjectData({
           store,
-          signup: false,
           projectId: undefined,
           scopeAdditions: CONNECT_SLACK_SCOPE_ADDITIONS,
         });

@@ -23,8 +23,6 @@ export type WizardRunOptions = {
   benchmark: boolean;
   yaraReport: boolean;
 
-  signup: boolean;
-  email?: string;
   apiKey?: string;
   projectId?: number;
 

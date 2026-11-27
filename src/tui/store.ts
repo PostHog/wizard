@@ -34,7 +34,6 @@ import {
 import { type DiscoveredFeature } from '@shared/discovered-feature';
 import { McpOutcome, RunPhase } from '@shared/run-state';
 import type { SettingsConflict } from '@shared/claude-settings';
-import type { CloudRegion } from '@utils/types';
 import { type WizardReadinessResult } from '@shared/health-checks/readiness';
 import {
   WizardRouter,
@@ -56,7 +55,7 @@ import {
 } from '@programs';
 import type {
   PlannedEvent,
-  PlanOffer,
+  ProjectSelection,
   TaskItem,
   WizardSession,
 } from '@programs/types';
@@ -451,27 +450,34 @@ export class WizardStore implements TuiView {
     return this.$tui.get().mintHandoff;
   }
 
-  get plan(): TuiState['plan'] {
-    return this.$tui.get().plan;
+  get projectSelection(): TuiState['projectSelection'] {
+    return this.$tui.get().projectSelection;
   }
 
-  /** Open the plan screen on the projects the run offers. `ranking` while a model source still answers. */
-  showPlan(offer: PlanOffer, ranking: boolean): void {
-    this._write({ plan: { offer, ranking, confirmed: null } });
+  /** Open the project picker on the projects the run offers. `ranking` while a model source still answers. */
+  showProjectPicker(selection: ProjectSelection, ranking: boolean): void {
+    this._write({
+      projectSelection: { selection, ranking, confirmedProjectPath: null },
+    });
   }
 
-  /** The model sources answered: the plan screen takes their plan. */
-  setPlanRanked(offer: PlanOffer): void {
+  /** The model sources answered: the project picker takes their selection. */
+  setProjectsRanked(selection: ProjectSelection): void {
     // A pick made while the sources still answered stands.
-    const confirmed = this.plan?.confirmed ?? null;
-    this._write({ plan: { offer, ranking: false, confirmed } });
+    const confirmedProjectPath =
+      this.projectSelection?.confirmedProjectPath ?? null;
+    this._write({
+      projectSelection: { selection, ranking: false, confirmedProjectPath },
+    });
   }
 
-  /** The person's pick on the plan screen. */
-  confirmPlan(projectPath: string): void {
-    const plan = this.plan;
-    if (!plan) return;
-    this._write({ plan: { ...plan, confirmed: projectPath } });
+  /** The person's pick on the project picker. */
+  confirmProjectPick(projectPath: string): void {
+    const picker = this.projectSelection;
+    if (!picker) return;
+    this._write({
+      projectSelection: { ...picker, confirmedProjectPath: projectPath },
+    });
   }
 
   /** Write TUI state, then `sessionWrites`' session fields, with one notification either way. */
@@ -907,27 +913,6 @@ export class WizardStore implements TuiView {
       ...sessionProperties(this.session),
     });
     this._write({ integrate });
-  }
-
-  /**
-   * Self-driving "no PostHog account" branch of the integration check. The
-   * project has no SDK, so we always integrate (`integrate = true`); and since
-   * the user has no account, we flip `signup` and record the `email` / `region`
-   * collected on the screen so `authenticate` → `getOrAskForProjectData` takes
-   * the provisioning path (create account + email a login link) instead of
-   * OAuth. The "yes, I have an account" branch uses `setIntegrate(true)` and
-   * leaves `signup` false so auth runs the normal OAuth login.
-   */
-  chooseProvisionAccount(email: string, region: CloudRegion): void {
-    analytics.wizardCapture('self-driving integration check', {
-      self_driving_integrate: true,
-      self_driving_has_account: false,
-      provision_region: region,
-      ...sessionProperties(this.session),
-    });
-    this._write({ integrate: true }, () =>
-      this.sessions.update({ signup: true, email, region }),
-    );
   }
 
   /**

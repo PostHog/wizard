@@ -7,6 +7,7 @@ import {
   Integration,
   Sequence,
   WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
+  WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY,
 } from '@shared/constants';
 import { HostResolution } from '@shared/host-resolution';
 import type { ApiUser } from '@shared/api';
@@ -52,7 +53,13 @@ import type {
   RunnerContext,
 } from '@programs/program-contract';
 import type { WizardSession } from '@services/session';
-import { runDiscovery } from '@services/project-discovery';
+import {
+  buildProjectSelection,
+  getTraits,
+  runDiscovery,
+  VERSIONED_SDK_SKILLS_ENABLED_KEY,
+} from '@services/project-discovery';
+import { scopeToProject } from '../detect-program';
 import { detectIntegrationProjects } from '@services/detection';
 import { AUDIT_CHECKS_KEY } from '@programs/audit';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
@@ -85,6 +92,7 @@ vi.mock('@utils/analytics', async (importOriginal) => ({
     setGroups: vi.fn(),
     groupIdentify: vi.fn(),
     getAllFlagsForWizard: vi.fn().mockResolvedValue({}),
+    getCachedWizardFlags: vi.fn(() => null),
   },
 }));
 vi.mock(import('@shared/oauth-tokens'), () => ({
@@ -96,7 +104,7 @@ vi.mock('@services/detection/decisions', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@services/detection/decisions')>()),
   runDecisionsSource: vi.fn(() => Promise.resolve(null)),
 }));
-// The plan's agentic ranking is one model call; everything else in detection runs real.
+// The project selection's agentic ranking is one model call; everything else in detection runs real.
 vi.mock(import('@services/detection'), async (importOriginal) => ({
   ...(await importOriginal()),
   detectIntegrationProjects: vi.fn(),
@@ -453,6 +461,34 @@ describe('runProgram', () => {
       expect(order).toEqual(['login', 'flags']);
       expect(runAgent).toHaveBeenCalledOnce();
     });
+  });
+
+  it('fails before any agent when the PostHog SDK is too old for the program', async () => {
+    const dir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'sdk-too-old-')),
+    );
+    fs.writeFileSync(
+      path.join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { 'posthog-node': '4.3.0' } }),
+    );
+    try {
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: store({ installDir: dir }),
+          config: { run, sdkFeature: 'errorTracking' },
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
+        }),
+        { credentials: login() },
+      );
+      expect(result).toMatchObject({
+        outcome: RunOutcome.Failed,
+        failure: { code: ErrorCodes.DetectSdkTooOld },
+      });
+      expect(runAgent).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('fails a program with no run configuration before anything starts', async () => {
@@ -812,7 +848,6 @@ describe('runProgram', () => {
           FRAMEWORK_REGISTRY[Integration.nextjs].metadata.docsUrl,
         flags: {
           ci: true,
-          signup: false,
           debug: true,
           yaraReport: true,
           e2eAsk: true,
@@ -1029,19 +1064,16 @@ describe('runProgram', () => {
     },
   );
 
-  it.each([{ ci: true }, { signup: true }])(
-    'skips the AI approval for a %o session',
-    async (fields) => {
-      const result = await runProgram(
-        'metrics',
-        input({ store: store(fields) }),
-        { credentials: login(null) },
-      );
+  it('skips the AI approval for a CI session', async () => {
+    const result = await runProgram(
+      'metrics',
+      input({ store: store({ ci: true }) }),
+      { credentials: login(null) },
+    );
 
-      expect(result.outcome).toBe(RunOutcome.Success);
-      expect(runAgent).toHaveBeenCalledTimes(1);
-    },
-  );
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(runAgent).toHaveBeenCalledTimes(1);
+  });
 
   it.each<[RunOutcome, RunResult['failure']]>([
     [
@@ -1333,7 +1365,6 @@ describe('runProgram', () => {
     expect(refreshAccessToken).toHaveBeenCalledExactlyOnceWith(
       'phr_aging',
       'https://posthog.example',
-      undefined,
     );
     expect(agentInput().credentials.accessToken).toBe('pha_refreshed');
     expect(s.session).toMatchObject({
@@ -1649,7 +1680,7 @@ describe('runProgram', () => {
       const host = workflow();
       host.confirmStep.mockImplementation((step: ProgramStep) => {
         host.steps.push(step);
-        if (step.kind === 'plan') step.pick('apps/api');
+        if (step.kind === 'project-selection') step.selectProject('apps/api');
         return Promise.resolve(true);
       });
 
@@ -1660,9 +1691,11 @@ describe('runProgram', () => {
       );
 
       expect(result.outcome).toBe(RunOutcome.Success);
-      const plan = host.steps.find((step) => step.kind === 'plan');
-      expect(plan).toMatchObject({
-        plan: { repoType: 'monorepo', picked: '.' },
+      const selectionStep = host.steps.find(
+        (step) => step.kind === 'project-selection',
+      );
+      expect(selectionStep).toMatchObject({
+        projectSelection: { repoType: 'monorepo', selectedProjectPath: '.' },
       });
       expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
       expect(s.session.runProject).toBe('apps/api');
@@ -1672,7 +1705,8 @@ describe('runProgram', () => {
       const s = pairStore();
       const host = workflow();
       host.confirmStep.mockImplementation((step: ProgramStep) => {
-        if (step.kind === 'plan') step.pick(step.plan.picked);
+        if (step.kind === 'project-selection')
+          step.selectProject(step.projectSelection.selectedProjectPath);
         return Promise.resolve(true);
       });
 
@@ -1703,7 +1737,10 @@ describe('runProgram', () => {
         const host = workflow();
         host.confirmStep.mockImplementation((step: ProgramStep) => {
           host.steps.push(step);
-          if (step.kind === 'plan') step.pick(projectPath ?? step.plan.picked);
+          if (step.kind === 'project-selection')
+            step.selectProject(
+              projectPath ?? step.projectSelection.selectedProjectPath,
+            );
           return Promise.resolve(true);
         });
         return host;
@@ -1713,7 +1750,7 @@ describe('runProgram', () => {
           .mocked(analytics.wizardCapture)
           .mock.calls.filter(([event]) => event === 'agent started');
 
-      it('reaches the plan, and runs in the app the person picks', async () => {
+      it('reaches the project picker, and runs in the app the person picks', async () => {
         const host = picking('apps/api');
         const s = pairStore();
         const result = await runProgram(
@@ -1726,7 +1763,9 @@ describe('runProgram', () => {
           { credentials: login(), workflow: host },
         );
 
-        expect(host.steps.some((step) => step.kind === 'plan')).toBe(true);
+        expect(
+          host.steps.some((step) => step.kind === 'project-selection'),
+        ).toBe(true);
         expect(result.outcome).toBe(RunOutcome.Success);
         expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
         expect(s.session.runProject).toBe('apps/api');
@@ -1793,7 +1832,7 @@ describe('runProgram', () => {
       });
     });
 
-    it('ranks the projects with agentic detection when the plan screen asks, and starts on its main app', async () => {
+    it('ranks the projects with agentic detection when the project picker asks, and starts on its main app', async () => {
       vi.mocked(detectIntegrationProjects).mockResolvedValue({
         repoType: 'monorepo',
         projects: [
@@ -1808,10 +1847,13 @@ describe('runProgram', () => {
       });
       const host = workflow();
       host.confirmStep.mockImplementation(async (step: ProgramStep) => {
-        if (step.kind !== 'plan') return true;
-        // What the plan screen does: rank once it opens, then confirm the project that starts picked.
-        const ranked = await step.rank?.();
-        step.pick(ranked?.picked ?? step.plan.picked);
+        if (step.kind !== 'project-selection') return true;
+        // What the project picker does: rank once it opens, then confirm the project that starts picked.
+        const ranked = await step.rankProjects?.();
+        step.selectProject(
+          ranked?.selectedProjectPath ??
+            step.projectSelection.selectedProjectPath,
+        );
         return true;
       });
       const s = pairStore();
@@ -1860,6 +1902,83 @@ describe('runProgram', () => {
       expect(result.outcome).toBe(RunOutcome.Success);
       expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
       expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
+    it('ranks a CI run with several projects and no workspace marker, and takes the main app', async () => {
+      fs.rmSync(path.join(repo, 'pnpm-workspace.yaml'));
+      vi.mocked(detectIntegrationProjects).mockResolvedValue({
+        repoType: 'single',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      const s = new SessionStore(buildSession({ installDir: repo, ci: true }));
+
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: { ...everyProject, rankWith: ['agentic'] },
+          wizardFlags: DISCOVERY_ON,
+        }),
+        { credentials: login() },
+      );
+
+      expect(result.outcome).toBe(RunOutcome.Success);
+      expect(detectIntegrationProjects).toHaveBeenCalledTimes(1);
+      expect(s.session.runProject).toBe('apps/api');
+      expect(agentInput().installDir).toBe(path.join(repo, 'apps/api'));
+    });
+
+    it('drops a ranking reply that lands after the run was cancelled', async () => {
+      fs.rmSync(path.join(repo, 'pnpm-workspace.yaml'));
+      const controller = new AbortController();
+      type Report = Awaited<ReturnType<typeof detectIntegrationProjects>>;
+      let reply: (report: Report) => void = () => undefined;
+      vi.mocked(detectIntegrationProjects).mockImplementation(
+        () =>
+          new Promise<Report>((resolve) => {
+            reply = resolve;
+            controller.abort();
+          }),
+      );
+      const s = new SessionStore(buildSession({ installDir: repo, ci: true }));
+      const config = { ...everyProject, rankWith: ['agentic' as const] };
+
+      const result = await runProgram(
+        'metrics',
+        input({ store: s, config, wizardFlags: DISCOVERY_ON }),
+        { credentials: login(), signal: controller.signal },
+      );
+      vi.mocked(analytics.wizardCapture).mockClear();
+      reply({
+        repoType: 'single',
+        projects: [
+          {
+            path: 'apps/api',
+            framework: 'Express',
+            targetId: 'javascript_node',
+            hasPostHog: false,
+            recommended: true,
+          },
+        ],
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(result.outcome).toBe(RunOutcome.Aborted);
+      expect(buildProjectSelection(s.session, config).selectedProjectPath).toBe(
+        '.',
+      );
+      expect(analytics.wizardCapture).not.toHaveBeenCalledWith(
+        'projects selected',
+        expect.anything(),
+      );
     });
 
     it('reads the project again when login turns discovery on', async () => {
@@ -1928,10 +2047,12 @@ describe('runProgram', () => {
         input({ store: pairStore(), config: everyProject }),
         { credentials: login(), workflow: host },
       );
-      expect(host.steps.some((step) => step.kind === 'plan')).toBe(false);
+      expect(host.steps.some((step) => step.kind === 'project-selection')).toBe(
+        false,
+      );
     });
 
-    it('stops when the host declines the plan', async () => {
+    it('stops when the host declines the project selection', async () => {
       const result = await runProgram(
         'metrics',
         input({
@@ -1941,7 +2062,7 @@ describe('runProgram', () => {
         }),
         {
           credentials: login(),
-          workflow: workflow((step) => step.kind !== 'plan'),
+          workflow: workflow((step) => step.kind !== 'project-selection'),
         },
       );
       expect(result.outcome).toBe(RunOutcome.Aborted);
@@ -1995,6 +2116,83 @@ describe('runProgram', () => {
         posthogInstalled: ['yes'],
       });
       expect(s.session.runProject).toBe('.');
+    });
+
+    it('propagates wizard-versioned-sdk-skills into traits, matchKeys, and scopeToProject only when true', async () => {
+      fs.writeFileSync(
+        path.join(repo, 'apps/api/package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '^5.4.0' } }),
+      );
+      vi.mocked(analytics.getCachedWizardFlags).mockReturnValue({
+        [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true',
+      });
+
+      const offStore = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/api') }),
+      );
+      await runProgram(
+        'metrics',
+        input({
+          store: offStore,
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'false' },
+        }),
+        { credentials: login() },
+      );
+      expect(agentConfig(0).matchKeys?.()).not.toHaveProperty('posthogSdks');
+
+      vi.mocked(runAgent).mockClear();
+      const onStore = new SessionStore(
+        buildSession({ installDir: path.join(repo, 'apps/api') }),
+      );
+      await runProgram(
+        'metrics',
+        input({
+          store: onStore,
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
+        }),
+        { credentials: login() },
+      );
+      expect(agentConfig(0).matchKeys?.()).toMatchObject({
+        posthogSdks: ['npm:posthog-node@5'],
+      });
+
+      const scopedStore = pairStore();
+      await runDiscovery({ id: 'metrics' }, scopedStore.readyContext());
+      scopedStore.setFrameworkContext(VERSIONED_SDK_SKILLS_ENABLED_KEY, true);
+      scopeToProject(scopedStore, 'apps/api');
+      expect(getTraits(scopedStore.session, 'apps/api').posthogSdks).toEqual([
+        'npm:posthog-node@5',
+      ]);
+    });
+
+    it('checks SDK minimums against the scoped runStep target directory', async () => {
+      fs.writeFileSync(
+        path.join(repo, 'apps/api/package.json'),
+        JSON.stringify({ dependencies: { 'posthog-node': '4.3.0' } }),
+      );
+      const s = pairStore();
+      await runDiscovery({ id: 'metrics' }, s.readyContext());
+      s.setDetectionComplete();
+      const result = await runProgram(
+        'metrics',
+        input({
+          store: s,
+          config: {
+            run,
+            sdkFeature: 'errorTracking',
+            runSteps: {
+              run: { targetDir: () => path.join(repo, 'apps/api') },
+            },
+          },
+          wizardFlags: { [WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY]: 'true' },
+        }),
+        { credentials: login(), workflow: workflow() },
+      );
+      expect(result).toMatchObject({
+        outcome: RunOutcome.Failed,
+        failure: { code: ErrorCodes.DetectSdkTooOld },
+      });
+      expect(runAgent).not.toHaveBeenCalled();
     });
 
     it('stops on a project whose real directory is outside the workspace', async () => {
@@ -2109,7 +2307,7 @@ describe('runProgram', () => {
       expect(asked.rankProjects).toBe(false);
     });
 
-    it("asks the questions again for the pair's project when the plan moves the run", async () => {
+    it("asks the questions again for the pair's project when the pick moves the run", async () => {
       const repo = fs.realpathSync(
         fs.mkdtempSync(path.join(os.tmpdir(), 'decisions-pair-')),
       );
@@ -2125,7 +2323,7 @@ describe('runProgram', () => {
         }
         const host = workflow();
         host.confirmStep.mockImplementation((step: ProgramStep) => {
-          if (step.kind === 'plan') step.pick('apps/api');
+          if (step.kind === 'project-selection') step.selectProject('apps/api');
           return Promise.resolve(true);
         });
 

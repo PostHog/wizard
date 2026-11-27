@@ -59,12 +59,7 @@ const auditRun = async (
     // Override the default outro so the dashboard + notebook URLs the
     // agent emits via `[DASHBOARD_URL]` / `[NOTEBOOK_URL]` are surfaced
     // on the post-run screen.
-    buildOutroData: (sess, credentials) => {
-      const cloudUrl = credentials.host.appHost;
-      const continueUrl = sess.signup
-        ? `${cloudUrl}/products?source=wizard`
-        : undefined;
-
+    buildOutroData: () => {
       // The session store lays any URL the agent emitted during the run over
       // this outro, so dashboardUrl/notebookUrl may stay undefined here.
       return {
@@ -72,7 +67,6 @@ const auditRun = async (
         message: baseRun.successMessage,
         reportFile: baseRun.reportFile,
         docsUrl: baseRun.docsUrl,
-        continueUrl,
         dashboardUrl: session.dashboardUrl ?? undefined,
         notebookUrl: session.notebookUrl ?? undefined,
       };

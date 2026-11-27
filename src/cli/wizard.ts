@@ -38,12 +38,6 @@ export const GLOBAL_OPTIONS = {
       'Write the debug log to this file (default: posthog-wizard.log in the temp dir)\nenv: POSTHOG_WIZARD_LOG_FILE',
     type: 'string' as const,
   },
-  signup: {
-    default: false,
-    describe:
-      'Create a new PostHog account during setup\nenv: POSTHOG_WIZARD_SIGNUP',
-    type: 'boolean' as const,
-  },
   telemetry: {
     default: true,
     describe:
@@ -58,11 +52,6 @@ export const GLOBAL_OPTIONS = {
   'project-id': {
     describe:
       'PostHog project ID to use (optional; when not set, uses default from API key or OAuth)\nenv: POSTHOG_WIZARD_PROJECT_ID',
-    type: 'string' as const,
-  },
-  email: {
-    describe:
-      'Email address for signup (used with --signup)\nenv: POSTHOG_WIZARD_EMAIL',
     type: 'string' as const,
   },
   // Hidden while `wizard-project-discovery` rolls out.
@@ -171,9 +160,14 @@ export class Wizard {
         })
         .option('test-discovery', {
           describe:
-            'Test discovery mode: print the projects, traits and plan a run finds before login, then exit. Pass json for JSON.',
+            'Test discovery mode: print the projects, traits and project selection a run finds before login, then exit. Pass json for JSON.',
           type: 'string',
           choices: ['', 'text', 'json'],
+        })
+        .option('test-discovery-out', {
+          describe:
+            'With --test-discovery: save the report to this file instead of printing it. A .json path saves JSON. Repeat it to save more than one file.\nenv: POSTHOG_WIZARD_TEST_DISCOVERY_OUT',
+          type: 'string',
         })
         // Rides beside the PostHog destination rather than replacing it, so a
         // logged run is the same run the backend sees.

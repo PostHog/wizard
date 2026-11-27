@@ -36,12 +36,14 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
   [ErrorCodes.ArgsMissingEmail]: {
     group: 'args',
     retry: 'no',
-    description: 'Signup run without --email.',
+    description:
+      'No longer emitted. Signup run without --email, before account provisioning was removed.',
   },
   [ErrorCodes.ArgsSignupProvisionFailed]: {
     group: 'args',
     retry: 'yes',
-    description: 'Account provisioning for --signup failed.',
+    description:
+      'No longer emitted. Account provisioning for --signup failed, before it was removed.',
   },
   [ErrorCodes.AuthKeyType]: {
     group: 'auth',
@@ -122,6 +124,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = {
     retry: 'no',
     description:
       'The program requires an installed PostHog SDK and none was found.',
+  },
+  [ErrorCodes.DetectSdkTooOld]: {
+    group: 'detect',
+    retry: 'no',
+    description:
+      "The project's PostHog SDK is below the program's minimum version.",
   },
   [ErrorCodes.DetectNoProjectFiles]: {
     group: 'detect',

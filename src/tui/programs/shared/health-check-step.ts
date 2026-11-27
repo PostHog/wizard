@@ -16,8 +16,6 @@ import type { TuiView } from '@tui/tui-state';
 import {
   evaluateWizardReadiness,
   WizardReadiness,
-  SIGNUP_WIZARD_READINESS_CONFIG,
-  getBlockingServiceKeys,
 } from '@shared/health-checks/readiness';
 import { logToFile } from '@utils/debug';
 
@@ -26,19 +24,6 @@ export function healthCheckReady({
   outageDismissed,
 }: TuiView): boolean {
   if (!session.readinessResult) return false;
-
-  if (session.signup) {
-    const hardBlocking = getBlockingServiceKeys(
-      session.readinessResult.health,
-      SIGNUP_WIZARD_READINESS_CONFIG,
-    );
-    const defaultBlocking = getBlockingServiceKeys(
-      session.readinessResult.health,
-    );
-    if (hardBlocking.length === 0 && defaultBlocking.length === 0) return true;
-    return outageDismissed;
-  }
-
   if (session.readinessResult.decision === WizardReadiness.No) {
     return outageDismissed;
   }

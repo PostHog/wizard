@@ -21,10 +21,16 @@ import { judgeMissingIntegration } from './decisions';
 import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
-import { picksProject } from '@services/project-discovery';
+import {
+  getProject,
+  picksProject,
+  sdkFeatureGaps,
+} from '@services/project-discovery';
+import { sdkUpgradeNextSteps } from '../shared/sdk-upgrade-steps';
 import type {
   CiRunnerContext,
   RunnerContext,
+  SdkFeature,
 } from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
@@ -37,15 +43,12 @@ import {
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
 } from '@shared/constants';
-import { requestDeepLink } from '@utils/provisioning';
-import { openTrackedLink, withUtm } from '@utils/links';
+import { withUtm } from '@utils/links';
 import type { HostResolution } from '@shared/host-resolution';
 import { getDetectedWarehouseSources } from '@services/warehouse-sources';
 import { buildCodingAgentPrompt } from './handoff.js';
 import { EVENT_PLAN_FILE } from './constants.js';
 import { WAREHOUSE_SOURCE_SCOPE_ADDITIONS } from '../shared/program-scopes';
-
-const DASHBOARD_DEEP_LINK_KEY = 'dashboardDeepLink';
 
 const WAREHOUSE_SOURCES_DOCS_URL =
   'https://posthog.com/docs/data-warehouse/sources';
@@ -55,6 +58,24 @@ const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
 
 /** The `integration-v2` flow's task that instruments the project's MCP server. */
 const MCP_ANALYTICS_TASK_TYPE = 'mcp-analytics';
+
+/** This flow's tasks by the product each sets up, for products with a PostHog SDK minimum. */
+const SDK_FEATURE_TASKS: ReadonlyArray<readonly [string, SdkFeature]> = [
+  ['error-tracking', 'errorTracking'],
+  [MCP_ANALYTICS_TASK_TYPE, 'mcpAnalytics'],
+  ['ai-observability', 'aiObservability'],
+];
+
+/** The products this run would set up for the project, among those with a PostHog SDK minimum. */
+function offeredSdkFeatures(sess: ProgramSession): SdkFeature[] {
+  return [
+    'errorTracking',
+    ...(sess.mcpServerCandidates.length > 0 ? ['mcpAnalytics' as const] : []),
+    ...(getProject(sess).traits.callsLlmApi === 'yes'
+      ? ['aiObservability' as const]
+      : []),
+  ];
+}
 
 /** Candidate paths the MCP fact names before it summarizes the rest. */
 const MCP_FACT_PATH_LIMIT = 5;
@@ -80,16 +101,6 @@ function mcpServerFact(candidates: readonly string[]): string {
   return `MCP server candidates from the wizard's scan, examples last: ${shown}${
     more > 0 ? ` (and ${more} more)` : ''
   }`;
-}
-
-function resolveContinueUrl(
-  sess: ProgramSession,
-  host: HostResolution,
-  deepLink: unknown,
-): string | undefined {
-  if (!sess.signup) return undefined;
-  if (typeof deepLink === 'string' && deepLink) return deepLink;
-  return withUtm(`${host.appHost}/products?source=wizard`, 'outro-continue');
 }
 
 /** Sources listed with their own link before the outro falls back to a summary line. */
@@ -180,6 +191,21 @@ function buildWarehouseNextSteps(
   return { heading: 'Query your other data in PostHog:', items };
 }
 
+/** The outro's next steps: products a too-old PostHog SDK skipped, then data sources to connect. */
+function buildNextSteps(
+  sess: ProgramSession,
+  host: HostResolution,
+  projectId: number | string,
+): { heading: string; items: string[] } | undefined {
+  const upgrades = sdkUpgradeNextSteps(sess, offeredSdkFeatures(sess));
+  const warehouse = buildWarehouseNextSteps(sess, host, projectId);
+  if (!upgrades || !warehouse) return upgrades ?? warehouse;
+  return {
+    heading: 'Next steps:',
+    items: [...upgrades.items, ...warehouse.items],
+  };
+}
+
 /**
  * Prompt fragment asking the agent to note the detected data sources in the
  * setup report's checklist.
@@ -210,7 +236,7 @@ function warehouseReportInstruction(sess: ProgramSession): string {
  * by `seeded-deps.ts` once the planner has run) — this file only decides whether
  * the task belongs in the run at all.
  *
- * Empty when detection found no `in-cli` source, and in CI, signup, and any
+ * Empty when detection found no `in-cli` source, and in CI and any
  * other run where `wizard_ask` is disabled — a credential prompt nobody can
  * answer would burn the task's whole timeout and then fail the run. Capped at
  * {@link WAREHOUSE_SEED_LIMIT} sources; {@link buildWarehouseNextSteps} hands
@@ -336,6 +362,9 @@ export const config: ProgramConfig = {
       ? ['ai-observability', 'logs']
       : []),
     ...(mcpAnalyticsStepOn(flags, sess) ? [] : [MCP_ANALYTICS_TASK_TYPE]),
+    ...SDK_FEATURE_TASKS.filter(([, feature]) =>
+      sdkFeatureGaps(sess, [feature]).some((gap) => gap.blocking),
+    ).map(([type]) => type),
   ],
   // The fact exists only beside the task, so no other task acts on it alone.
   detectedFacts: (flags, sess) =>
@@ -380,7 +409,6 @@ export const config: ProgramConfig = {
     const context = await gatherFrameworkContext(frameworkConfig, {
       installDir: session.installDir,
       debug: session.debug,
-      signup: session.signup,
       ci: true,
       benchmark: session.benchmark,
       yaraReport: session.yaraReport,
@@ -559,37 +587,16 @@ ${warehouseReportInstruction(session)}
             });
           }
         }
-
-        if (sess.signup) {
-          const deepLink = await requestDeepLink(
-            credentials.accessToken,
-            credentials.host,
-          );
-          if (deepLink) {
-            const taggedDeepLink = withUtm(deepLink, 'dashboard-deeplink');
-            sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY] = taggedDeepLink;
-            openTrackedLink(taggedDeepLink, 'dashboard-deeplink', {
-              auto: true,
-            });
-          }
-        }
       },
 
       buildOutroNextSteps: (sess, credentials) =>
-        buildWarehouseNextSteps(sess, credentials.host, credentials.projectId),
+        buildNextSteps(sess, credentials.host, credentials.projectId),
 
       buildOutroData: (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
           credentials.projectApiKey,
           credentials.host.apiHost,
         );
-        const deepLink = sess.frameworkContext[DASHBOARD_DEEP_LINK_KEY];
-        const continueUrl = resolveContinueUrl(
-          sess,
-          credentials.host,
-          deepLink,
-        );
-
         const changes = [
           ...config.ui.getOutroChanges(frameworkContext),
           Object.keys(envVars).length > 0
@@ -602,9 +609,8 @@ ${warehouseReportInstruction(session)}
           message: 'Successfully installed PostHog!',
           changes,
           docsUrl: config.metadata.docsUrl,
-          continueUrl,
           // `buildOutroNextSteps` carries the orchestrated case.
-          nextSteps: buildWarehouseNextSteps(
+          nextSteps: buildNextSteps(
             sess,
             credentials.host,
             credentials.projectId,

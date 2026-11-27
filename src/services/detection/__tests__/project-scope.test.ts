@@ -117,7 +117,7 @@ describe('scopeInstallDirToProject', () => {
   it.each<
     [string, (session: ReturnType<typeof buildSession>) => void, boolean]
   >([
-    ["the program's plan picks the project", () => undefined, true],
+    ['the program picks its own project', () => undefined, true],
     [
       'the run already works in a project the caller named',
       (session) => {
@@ -125,18 +125,18 @@ describe('scopeInstallDirToProject', () => {
       },
       false,
     ],
-  ])('stands down when %s', async (_name, arrange, planPicks) => {
+  ])('stands down when %s', async (_name, arrange, programPicks) => {
     flagsSpy.mockResolvedValue(FLAG_ON);
     const session = buildSession({ installDir: '/repo' });
     arrange(session);
-    await scopeInstallDirToProject(session, runner, planPicks);
+    await scopeInstallDirToProject(session, runner, programPicks);
 
     expect(authenticate).not.toHaveBeenCalled();
     expect(scan).not.toHaveBeenCalled();
     expect(session.installDir).toBe('/repo');
   });
 
-  it('still scans with project discovery on, for a program whose plan picks no project', async () => {
+  it('still scans with project discovery on, for a program that picks no project', async () => {
     flagsSpy.mockResolvedValue(FLAG_ON);
     scan.mockResolvedValue({ repoType: 'single', projects: [] });
     const session = buildSession({ installDir: '/repo' });

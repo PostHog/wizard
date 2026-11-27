@@ -55,8 +55,8 @@ Each domain has a dedicated boundary:
   is an agent run; see [src/programs/README.md](src/programs/README.md) and the
   [developer interfaces](docs/developer-interfaces.md)
 - **Tools** → `src/tools/` (`@tools`, one entry), the commands that run no
-  agent: `mcp add`, `mcp remove`, `mcp tutorial`, `slack`, `doctor`,
-  `provision`, `cli add` and `skill list`. A tool may import env, shared and the
+  agent: `mcp add`, `mcp remove`, `mcp tutorial`, `slack`, `doctor`, `cli add`
+  and `skill list`. A tool may import env, shared and the
   `@agent` entry (the MCP tutorial's prompt stream only), never the programs,
   host, TUI, headless or CLI, and no program imports it. Its screens live in
   `src/tui/tools/<id>/`, run by `runTuiTool`; every tool runner resolves an exit

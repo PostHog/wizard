@@ -5,7 +5,9 @@ export const ErrorCodes = {
   CliInteractiveRequired: 'PHW_CLI_INTERACTIVE_REQUIRED',
   ArgsMissingApiKey: 'PHW_ARGS_MISSING_API_KEY',
   ArgsMissingInstallDir: 'PHW_ARGS_MISSING_INSTALL_DIR',
+  /** No longer emitted: account provisioning is gone. Kept because released codes stay in the catalog. */
   ArgsMissingEmail: 'PHW_ARGS_MISSING_EMAIL',
+  /** No longer emitted: account provisioning is gone. Kept because released codes stay in the catalog. */
   ArgsSignupProvisionFailed: 'PHW_ARGS_SIGNUP_PROVISION_FAILED',
   AuthKeyType: 'PHW_AUTH_KEY_TYPE',
   AuthMissingScope: 'PHW_AUTH_MISSING_SCOPE',
@@ -23,6 +25,7 @@ export const ErrorCodes = {
   DetectUnsupportedVersion: 'PHW_DETECT_UNSUPPORTED_VERSION',
   DetectUnsupportedPlatform: 'PHW_DETECT_UNSUPPORTED_PLATFORM',
   DetectNoPosthogSdk: 'PHW_DETECT_NO_POSTHOG_SDK',
+  DetectSdkTooOld: 'PHW_DETECT_SDK_TOO_OLD',
   DetectNoProjectFiles: 'PHW_DETECT_NO_PROJECT_FILES',
   DetectNoSources: 'PHW_DETECT_NO_SOURCES',
   DetectNoPackageJson: 'PHW_DETECT_NO_PACKAGE_JSON',

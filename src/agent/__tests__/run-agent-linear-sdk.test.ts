@@ -4,6 +4,10 @@
  * collects, and how the SDK's results come back. Detection's own retry and
  * report logic is locked in `services/detection/__tests__`.
  */
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { zipSync } from 'fflate';
 import { runAgent } from '@agent/runner';
 import { RunOutcome } from '@agent/runner/shared/types';
 import type { AgentProgress, RunConfig, RunInput } from '@agent/types';
@@ -12,7 +16,7 @@ import {
   initializeAgent,
   runAgent as executeAgent,
 } from '@agent/agent-interface';
-import { flushScanReport } from '@agent/yara-hooks';
+import { flushScanReport, scanInstalledSkill } from '@agent/yara-hooks';
 import { HostResolution } from '@shared/host-resolution';
 import {
   CallType,
@@ -33,6 +37,7 @@ vi.mock(import('@agent/agent-interface'), async (importOriginal) => ({
 vi.mock(import('@agent/yara-hooks'), async (importOriginal) => ({
   ...(await importOriginal()),
   flushScanReport: vi.fn(),
+  scanInstalledSkill: vi.fn(() => Promise.resolve(null)),
 }));
 // The runner mints before each run; no mint may leave the process.
 vi.mock(import('@agent/gateway-session'), async (importOriginal) => ({
@@ -96,7 +101,6 @@ const input: RunInput = {
   apiUser: null,
   flags: {
     ci: false,
-    signup: false,
     debug: false,
     e2eAsk: false,
     localMcp: false,
@@ -313,4 +317,127 @@ it('reports each assistant step of a collected transcript as an activity line', 
     'Reading the root manifest.',
     'Read package.json',
   ]);
+});
+
+describe('linear trait SDK skill installation', () => {
+  const dirs: string[] = [];
+  const makeTmpDir = (prefix: string) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    dirs.push(dir);
+    return dir;
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    for (const dir of dirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  const sdkZip = zipSync({
+    'SKILL.md': new TextEncoder().encode(
+      '# PostHog Node 5.x\nKeep the declared major and existing client.\n',
+    ),
+  });
+
+  function mockSdkFetch() {
+    const fetchMock = vi.fn((target: string | URL | Request) => {
+      const url = typeof target === 'string' ? target : target.toString();
+      if (url.endsWith('/skill-menu.json')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              categories: {
+                'sdk/posthog-node': [
+                  {
+                    id: 'sdk-posthog-node-v5',
+                    name: 'PostHog Node 5.x',
+                    downloadUrl: 'https://skills.test/sdk-posthog-node-v5.zip',
+                    tags: [
+                      'posthogSdks:posthog-node@4',
+                      'posthogSdks:posthog-node@5',
+                    ],
+                  },
+                  {
+                    id: 'sdk-posthog-node-v6',
+                    name: 'PostHog Node 6.x',
+                    downloadUrl: 'https://skills.test/sdk-posthog-node-v6.zip',
+                    tags: ['posthogSdks:posthog-node@6', 'default'],
+                  },
+                ],
+              },
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+        );
+      }
+      if (url === 'https://skills.test/sdk-posthog-node-v5.zip') {
+        return Promise.resolve(new Response(sdkZip, { status: 200 }));
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+  }
+
+  it('installs matching SDK trait skill into .claude/skills, forwards triageProvider, and injects prompt path', async () => {
+    const dir = makeTmpDir('linear-sdk-live-');
+    const fetchSpy = mockSdkFetch();
+    const expectedPath = path.join(
+      '.claude',
+      'skills',
+      'sdk-posthog-node-v5',
+      'SKILL.md',
+    );
+    let installedDuringRun = false;
+    let promptSeen = '';
+    execute.mockImplementationOnce((_agent, prompt, _opts, _spin, _msg, mw) => {
+      installedDuringRun = fs.existsSync(path.join(dir, expectedPath));
+      promptSeen = prompt;
+      mw?.onMessage({ type: 'result', result: 'Done.' });
+      return Promise.resolve({ kind: 'success' });
+    });
+
+    const result = await runAgent(
+      {
+        ...config,
+        run: {
+          ...config.run,
+          readOnly: false,
+          prompt: undefined,
+          customPrompt: () => 'CUSTOM',
+        },
+        matchKeys: () => ({ posthogSdks: ['posthog-node@5'] }),
+      },
+      { ...input, installDir: dir },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(installedDuringRun).toBe(true);
+    expect(promptSeen).toContain(expectedPath);
+    expect(scanInstalledSkill).toHaveBeenCalledWith(
+      expect.stringContaining('sdk-posthog-node-v5'),
+      expect.any(Function),
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('continues the linear run without sdkSkillPaths when a matched SDK trait skill fails to install', async () => {
+    const dir = makeTmpDir('linear-sdk-fail-');
+    mockSdkFetch();
+    vi.mocked(scanInstalledSkill).mockResolvedValueOnce('poisoned');
+    emitResult('Done.');
+
+    const result = await runAgent(
+      {
+        ...config,
+        run: { ...config.run, readOnly: false },
+        matchKeys: () => ({ posthogSdks: ['posthog-node@5'] }),
+      },
+      { ...input, installDir: dir },
+    );
+
+    expect(result.outcome).toBe(RunOutcome.Success);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
 });

@@ -503,7 +503,7 @@ describe('discoverTools — repository-controlled paths', () => {
 describe('parseGemfile', () => {
   it('extracts gem names', () => {
     const content = `source 'https://rubygems.org'\ngem 'pg', '~> 1.5'\ngem "stripe"\n# gem 'commented'`;
-    expect(parseGemfile(content)).toEqual(['pg', 'stripe']);
+    expect(Object.keys(parseGemfile(content))).toEqual(['pg', 'stripe']);
   });
 });
 

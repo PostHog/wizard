@@ -101,8 +101,8 @@ export const signature: (
 The store holds PostHog tokens, including the refresh token, once the run logs
 in. Don't log or serialize its credentials.
 
-A `ci` or `signup` session skips the AI-processing approval. Set them only
-when consent is already settled.
+A `ci` session skips the AI-processing approval. Set it only when consent is
+already settled.
 
 ### The session store
 
@@ -128,7 +128,7 @@ that needs a decision, and continues on `true`:
 | `ai-approval`       | The organization hasn't approved AI data processing                   | The run fails                       |
 | `service-outage`    | A service the run needs is down; `step.readiness` says which          | The run goes on and logs the outage |
 | `settings-conflict` | A Claude settings file redirects the agent; `step.fix()` removes it   | The run fails closed                |
-| `plan`              | After login, when the program is offered several projects: `step.plan` lists them, `step.rank()` waits for the model sources and `step.pick(path)` names the one the run works in | The run takes `step.plan.picked` |
+| `project-selection` | After login, when several projects are eligible: `step.projectSelection` lists them, `step.rankProjects()` waits for the model sources and `step.selectProject(path)` names the one the run works in | The run takes `step.projectSelection.selectedProjectPath` |
 | `run`               | Before each agent run: a composed sub-run from `runSteps`, then `run` | Only the program's own run runs     |
 
 `finishStep(step, result)` reports each agent run step once it settles. The TUI

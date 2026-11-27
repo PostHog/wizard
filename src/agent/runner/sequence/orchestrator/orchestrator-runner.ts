@@ -24,19 +24,15 @@ import {
 import * as path from 'path';
 import { OutroKind } from '@shared/outro';
 import type { AgentProgress, TaskNotice } from '../../../progress';
-import {
-  POSTHOG_DOCS_URL,
-  WIZARD_CONTACT_EMAIL,
-  WIZARD_OAUTH_SCOPES,
-  WIZARD_PROVISIONING_SCOPES,
-} from '@shared/constants';
+import { POSTHOG_DOCS_URL, WIZARD_CONTACT_EMAIL } from '@shared/constants';
+import { missingSetupScopes } from '@shared/oauth-tokens';
 import { installSkillById } from '@shared/skill-install';
 import {
   formatYaraAbortMessage,
   scanInstalledSkill,
   scanInstalledSkillFile,
 } from '../../../yara-hooks';
-import { fetchSkillMenu, type SkillEntry } from '@shared/skill-menu';
+import { fetchSkillMenu } from '@shared/skill-menu';
 import { FRAMEWORK_KEY, resolveSkill } from '@shared/skill-resolution';
 import { analytics } from '@utils/analytics';
 import { ciExcludedTaskTypes } from '@utils/ci-flag-overrides';
@@ -59,6 +55,10 @@ import type {
   SequenceContext,
 } from '../../shared/types';
 import { runMatchKeys } from '../../shared/match-keys';
+import {
+  hasNonFrameworkMatchKeys,
+  installTraitSkills,
+} from '../../shared/trait-skills';
 import { createEmitSpinner } from '../../shared/progress-collector';
 import { createAskBridge } from '../../shared/ask';
 import {
@@ -244,15 +244,6 @@ function cancelledRun(): SequenceResult {
     outcome: RunOutcome.Aborted,
     failure: { code: ErrorCodes.AgentAbort, message: 'Agent run cancelled' },
   };
-}
-
-/** Every skill entry the menu knows, across categories. */
-async function fetchSkillMenuEntries(
-  skillsBaseUrl: string,
-): Promise<SkillEntry[]> {
-  const menu = await fetchSkillMenu(skillsBaseUrl);
-  if (!menu) return [];
-  return Object.values(menu.categories).flat();
 }
 
 /**
@@ -896,8 +887,9 @@ async function executeOrchestrator(
   let examplePath: string | undefined;
   let commandmentsPath: string | undefined;
   let referenceInstallPath: string | undefined;
-  const menuSkillEntries = await fetchSkillMenuEntries(boot.skillsBaseUrl);
+  const menu = await fetchSkillMenu(boot.skillsBaseUrl);
   if (signal?.aborted) return cancelledRun();
+  const menuSkillEntries = menu ? Object.values(menu.categories).flat() : [];
   // The project's traits are the match keys; their framework is the one the pack resolves for.
   const matchKeys = runMatchKeys(config);
   const framework = matchKeys[FRAMEWORK_KEY]?.[0];
@@ -943,6 +935,19 @@ async function executeOrchestrator(
     logToFile(
       `[orchestrator] no integration skill for framework "${framework}"`,
     );
+  }
+
+  let sdkSkillPaths: string[] = [];
+  if (hasNonFrameworkMatchKeys(matchKeys)) {
+    const traitInstall = await installTraitSkills({
+      entries: menuSkillEntries,
+      matchKeys,
+      installDir: input.installDir,
+      triageProvider: boot.triageProvider,
+      signal,
+    });
+    if (traitInstall.aborted) return cancelledRun();
+    sdkSkillPaths = traitInstall.paths;
   }
 
   // Preflight every task's mini-skills: a miss would run tasks skill-less, so fail properly instead.
@@ -1013,6 +1018,7 @@ async function executeOrchestrator(
     host: boot.credentials.host,
     examplePath,
     commandmentsPath,
+    sdkSkillPaths,
     facts: config.projectFacts?.() ?? [],
     accountOwner: config.accountOwnerContext
       ? accountOwnerFromEnv()
@@ -1152,7 +1158,7 @@ async function executeOrchestrator(
   }
 
   // One bridge for the run, handed only to a task whose prompt allows asking.
-  // Absent in CI and signup, where nobody can answer.
+  // Absent in CI, where nobody can answer.
   const askBridge = shouldDisableAsk(input.flags)
     ? undefined
     : createAskBridge(interaction, {
@@ -1743,10 +1749,8 @@ async function executeOrchestrator(
     // A grant narrowed at login is the one failure cause the user can fix
     // alone — lead with the fix, and only fall back to the report-a-bug line
     // when trying again doesn't work.
-    const missingScopes = (boot.credentials.missingScopes ?? []).filter(
-      (scope) =>
-        WIZARD_PROVISIONING_SCOPES.some((required) => required === scope) ||
-        !WIZARD_OAUTH_SCOPES.some((requested) => requested === scope),
+    const missingScopes = missingSetupScopes(
+      boot.credentials.missingScopes ?? [],
     );
     const reason =
       missingScopes.length > 0

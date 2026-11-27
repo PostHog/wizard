@@ -26,6 +26,8 @@ export type Traits = {
   webFrontend?: 'yes' | 'no';
   /** `yes` on the project a source picked as the repo's main app. */
   mainApp?: 'yes';
+  /** Each PostHog SDK the manifests declare, as `<package>@<major>`, such as `posthog-node@5`. */
+  posthogSdks?: readonly string[];
 };
 
 export type TraitName = keyof Traits;

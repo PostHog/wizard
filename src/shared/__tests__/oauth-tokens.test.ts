@@ -1,4 +1,8 @@
-import { missingOAuthScopes, OAuthTokenResponseSchema } from '../oauth-tokens';
+import {
+  missingOAuthScopes,
+  missingSetupScopes,
+  OAuthTokenResponseSchema,
+} from '../oauth-tokens';
 
 // A grant can be narrower than the request with no error: the consent screen
 // lets users deselect non-required scopes, and out-of-ceiling scopes are
@@ -34,6 +38,23 @@ describe('missingOAuthScopes', () => {
       'user:read',
       'query:read',
     ]);
+  });
+});
+
+// A failed setup tells the user which permissions to grant, so a scope only `doctor` or run streaming
+// uses must not show up as the cause.
+describe('missingSetupScopes', () => {
+  it('keeps setup scopes and drops the ones no setup task uses', () => {
+    expect(
+      missingSetupScopes([
+        'notebook:write',
+        'health_issue:read',
+        'wizard_session:write',
+        'wizard_run:write',
+        'organization:read',
+        'query:read',
+      ]),
+    ).toEqual(['notebook:write', 'query:read']);
   });
 });
 

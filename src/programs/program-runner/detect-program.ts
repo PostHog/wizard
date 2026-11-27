@@ -12,6 +12,7 @@ import {
   projectFromWorkspaceRoot,
   runDiscovery,
   settleProjects,
+  VERSIONED_SDK_SKILLS_ENABLED_KEY,
 } from '@services/project-discovery';
 import { DECISIONS_USE_KEY } from '@services/detection/decisions';
 import { detectErrorCode } from './detect-map';
@@ -69,7 +70,11 @@ export function scopeToProject(store: SessionStore, project: string): void {
     throw noProject();
   }
   // What the run already settled about the repo and its flags stays; what detection read in the old directory goes.
-  store.scopeToProject(target, project, [DISCOVERY_KEY, DECISIONS_USE_KEY]);
+  store.scopeToProject(target, project, [
+    DISCOVERY_KEY,
+    DECISIONS_USE_KEY,
+    VERSIONED_SDK_SKILLS_ENABLED_KEY,
+  ]);
 }
 
 /** Scope the store to the project a run works in: the one the caller names by its path from the workspace root, else the one it started in. */

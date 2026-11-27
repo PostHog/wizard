@@ -54,7 +54,6 @@ describe('Python version executable trust', () => {
         debug: false,
         benchmark: false,
         yaraReport: false,
-        signup: false,
       }),
     ).toBe('3.12.4');
     expect(fs.existsSync(marker)).toBe(false);
@@ -70,7 +69,6 @@ describe('Python version executable trust', () => {
         debug: false,
         benchmark: false,
         yaraReport: false,
-        signup: false,
       }),
     ).toBe('3.11.9');
     expect(fs.existsSync(marker)).toBe(false);
@@ -84,7 +82,6 @@ describe('Python version executable trust', () => {
         debug: false,
         benchmark: false,
         yaraReport: false,
-        signup: false,
       }),
     ).toBeUndefined();
     expect(fs.existsSync(marker)).toBe(false);

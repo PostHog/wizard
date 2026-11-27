@@ -13,7 +13,7 @@ import {
 } from '@tui/store';
 import { McpOutcome, RunPhase } from '@shared/run-state';
 import { TaskStatus } from '@shared/task-status';
-import type { PlanOffer, WizardSession } from '@programs/types';
+import type { ProjectSelection, WizardSession } from '@programs/types';
 import {
   tuiView,
   type TestTuiView,
@@ -64,8 +64,6 @@ vi.mock('@shared/health-checks/readiness.js', () => ({
     YesWithWarnings: 'yes-with-warnings',
   },
   SERVICE_LABELS: {},
-  // Generated signup sessions reach the branch that reads this config.
-  SIGNUP_WIZARD_READINESS_CONFIG: {},
   getBlockingServiceKeys: vi.fn(() => []),
 }));
 
@@ -146,11 +144,11 @@ interface MutationCase {
   emits: number;
 }
 
-const PLAN_OFFER: PlanOffer = {
+const PLAN_OFFER: ProjectSelection = {
   repoType: 'single',
-  projects: [{ path: '.', offered: true, mainApp: false }],
-  picked: '.',
-  complete: true,
+  projects: [{ path: '.', eligible: true, isMainApp: false }],
+  selectedProjectPath: '.',
+  isDiscoveryComplete: true,
 };
 
 const MUTATIONS: MutationCase[] = [
@@ -224,20 +222,20 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
-    name: 'showPlan',
-    invoke: (s) => s.showPlan(PLAN_OFFER, true),
+    name: 'showProjectPicker',
+    invoke: (s) => s.showProjectPicker(PLAN_OFFER, true),
     emits: 1,
   },
   {
-    name: 'setPlanRanked',
-    invoke: (s) => s.setPlanRanked(PLAN_OFFER),
+    name: 'setProjectsRanked',
+    invoke: (s) => s.setProjectsRanked(PLAN_OFFER),
     emits: 1,
   },
   {
-    name: 'confirmPlan',
+    name: 'confirmProjectPick',
     invoke: (s) => {
-      s.showPlan(PLAN_OFFER, false);
-      s.confirmPlan('.');
+      s.showProjectPicker(PLAN_OFFER, false);
+      s.confirmProjectPick('.');
     },
     emits: 2,
   },
@@ -409,11 +407,6 @@ const MUTATIONS: MutationCase[] = [
   {
     name: 'setIntegrate',
     invoke: (s) => s.setIntegrate(true, { via: 'screen' }),
-    emits: 1,
-  },
-  {
-    name: 'chooseProvisionAccount',
-    invoke: (s) => s.chooseProvisionAccount('a@b.com', 'us'),
     emits: 1,
   },
   {
@@ -667,13 +660,16 @@ describe('store invariants', () => {
     });
   });
 
-  describe('the plan', () => {
+  describe('the project picker', () => {
     it('keeps a pick made while the sources still ranked', () => {
       const s = createStore();
-      s.showPlan(PLAN_OFFER, true);
-      s.confirmPlan('.');
-      s.setPlanRanked(PLAN_OFFER);
-      expect(s.plan).toMatchObject({ ranking: false, confirmed: '.' });
+      s.showProjectPicker(PLAN_OFFER, true);
+      s.confirmProjectPick('.');
+      s.setProjectsRanked(PLAN_OFFER);
+      expect(s.projectSelection).toMatchObject({
+        ranking: false,
+        confirmedProjectPath: '.',
+      });
     });
   });
 
@@ -846,7 +842,6 @@ describe('store invariants', () => {
       if (flip()) view.session.frameworkContext = { postHogPresent: flip() };
       view.completedRuns = flip() ? ['integrate-run'] : [];
       view.session.detectionComplete = flip();
-      view.session.signup = flip();
       return view;
     }
 
