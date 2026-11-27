@@ -9,6 +9,7 @@ import logs from './agent/logs.md';
 import mcpAnalytics from './agent/mcp-analytics.md';
 import report from './agent/report.md';
 import review from './agent/review.md';
+import tracing from './agent/tracing.md';
 import warehouse from './agent/warehouse.md';
 
 /** This program's agent prompts by task type, imported as text, in the order tasks that can start together are queued. */
@@ -21,6 +22,7 @@ export const AGENT_PROMPTS: Readonly<Record<string, string>> = {
   capture,
   'ai-observability': aiObservability,
   logs,
+  tracing,
   review,
   dashboard,
   report,

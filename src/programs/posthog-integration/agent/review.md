@@ -11,7 +11,7 @@ effort_sdk: high
 skills: [posthog-best-practices, integration-build]
 allowedTools: [Read, Edit, Glob, Grep, Bash]
 disallowedTools: [enqueue_task]
-dependsOn: [install, init, identify, mcp-analytics, error-tracking, capture, ai-observability, logs]
+dependsOn: [install, init, identify, mcp-analytics, error-tracking, capture, ai-observability, logs, tracing]
 ---
 
 ## Goal
@@ -78,7 +78,7 @@ a handoff's minimum surfaces here as a failed install or build in that task's
 files; handle it the same way. Build Go with `go build -o /dev/null ./...` so no
 binary lands in the project, and never run `cargo fmt`, which reformats the
 whole crate. An optional upstream task
-(AI Observability, Logs, MCP analytics) may have failed and left partial edits no handoff
+(AI Observability, Logs, tracing, MCP analytics) may have failed and left partial edits no handoff
 describes — install and run the chosen compile checks either way, and let them surface stray
 imports; fix or revert them like any other defect. Do not run the test suite; the
 runtime does not allow it, and the chosen compile checks are the bar. A bad version only surfaces

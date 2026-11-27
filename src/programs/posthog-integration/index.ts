@@ -41,6 +41,7 @@ import {
   Sequence,
   WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY,
   WIZARD_DEFAULT_MCP_ANALYTICS_FLAG_KEY,
+  WIZARD_DEFAULT_TRACING_FLAG_KEY,
   WIZARD_INTERACTION_EVENT_NAME,
 } from '@shared/constants';
 import { withUtm } from '@utils/links';
@@ -355,13 +356,15 @@ export const config: ProgramConfig = {
   ],
 
   // AI Observability and Logs are a kill switch over a shipped default: only an
-  // explicit 'false' excludes them. MCP analytics is a launch flag: it needs
-  // 'true', so a failed flag fetch leaves it out, and a server from the scan.
+  // explicit 'false' excludes them. MCP analytics and tracing are launch flags:
+  // they need 'true', so a failed flag fetch leaves them out. MCP analytics also
+  // needs a server from the scan.
   excludedTaskTypes: (flags, sess) => [
     ...(flags[WIZARD_DEFAULT_AIO_LOGS_FLAG_KEY] === 'false'
       ? ['ai-observability', 'logs']
       : []),
     ...(mcpAnalyticsStepOn(flags, sess) ? [] : [MCP_ANALYTICS_TASK_TYPE]),
+    ...(flags[WIZARD_DEFAULT_TRACING_FLAG_KEY] === 'true' ? [] : ['tracing']),
     ...SDK_FEATURE_TASKS.filter(([, feature]) =>
       sdkFeatureGaps(sess, [feature]).some((gap) => gap.blocking),
     ).map(([type]) => type),
