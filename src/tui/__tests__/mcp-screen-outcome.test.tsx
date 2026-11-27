@@ -485,3 +485,136 @@ it('reports a failed detection once, as its error shows, before Enter', async ()
   ]);
   expect(store.mcpComplete).toBe(false);
 });
+
+it('asks before installing when confirmInstall is set, and writes nothing until the user agrees', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const install = vi.fn<McpInstaller['install']>((names) =>
+    Promise.resolve(
+      names.map((name) => ({ name, status: McpClientStatus.Changed })),
+    ),
+  );
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, install }}
+      confirmInstall
+    />,
+  );
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Add the PostHog MCP to your coding agents?'),
+  );
+  expect(lastFrame()).toContain('Found 1 coding agent: Cursor.');
+  await tick();
+  expect(install).not.toHaveBeenCalled();
+  expect(mcpCompleteCalls()).toEqual([]);
+
+  // "Add the PostHog MCP" is the first option.
+  stdin.write(ENTER);
+  await vi.waitFor(() => expect(lastFrame()).toContain('Press enter'));
+  expect(install).toHaveBeenCalledWith(
+    ['Cursor'],
+    expect.anything(),
+    undefined,
+  );
+  expect(lastFrame()).toContain('The PostHog MCP is ready in 1 coding agent');
+});
+
+it('installs nothing when the user skips the confirmation', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const install = vi.fn<McpInstaller['install']>(() => Promise.resolve([]));
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, install }}
+      confirmInstall
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Skip'));
+  await tick();
+  for (const key of [DOWN, ENTER]) {
+    stdin.write(key);
+    await tick();
+  }
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+  expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
+  expect(install).not.toHaveBeenCalled();
+  expect(mcpCompleteCalls()).toEqual([
+    [
+      'mcp complete',
+      expect.objectContaining({
+        mcp_outcome: McpOutcome.Skipped,
+        mcp_installed_clients: [],
+      }),
+    ],
+  ]);
+});
+
+it('installs nothing on esc from the confirmation', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const install = vi.fn<McpInstaller['install']>(() => Promise.resolve([]));
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, install }}
+      confirmInstall
+    />,
+  );
+  await vi.waitFor(() =>
+    expect(lastFrame()).toContain('Add the PostHog MCP to your coding agents?'),
+  );
+  await tick();
+  stdin.write(ESC);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+  expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
+  expect(install).not.toHaveBeenCalled();
+});
+
+it('still offers the AI assistants after the coding-agent install is skipped', async () => {
+  const store = new WizardStore(Tool.McpAdd);
+  store.session = buildSession({ installDir: '/app' });
+  const detectClients = () =>
+    Promise.resolve([
+      {
+        name: 'Cursor',
+        kind: 'local' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+      },
+      {
+        name: 'Example Web App',
+        kind: 'account' as const,
+        supportsPlugin: false,
+        pluginBundlesMcp: false,
+        finish: {
+          url: 'https://example.com/connectors/posthog',
+          instruction: 'Sign in and click "Connect" to finish.',
+        },
+      },
+    ]);
+  const install = vi.fn<McpInstaller['install']>(() => Promise.resolve([]));
+  const { stdin, lastFrame } = render(
+    <McpScreen
+      store={store}
+      installer={{ ...installer, detectClients, install }}
+      confirmInstall
+    />,
+  );
+  await vi.waitFor(() => expect(lastFrame()).toContain('Skip'));
+  await tick();
+  for (const key of [DOWN, ENTER]) {
+    stdin.write(key);
+    await tick();
+  }
+  await vi.waitFor(() => expect(lastFrame()).toContain('Step 2 of 2'));
+  expect(install).not.toHaveBeenCalled();
+
+  await tick();
+  stdin.write(ESC);
+  await vi.waitFor(() => expect(store.mcpComplete).toBe(true));
+  expect(store.mcpOutcome).toBe(McpOutcome.Skipped);
+  expect(store.mcpInstalledClients).toEqual([]);
+  expect(install).not.toHaveBeenCalled();
+});

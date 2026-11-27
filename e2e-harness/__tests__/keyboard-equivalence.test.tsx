@@ -193,16 +193,32 @@ const PAIRS: Pair[] = [
     name: 'mcp: enter on install results vs set_mcp_outcome installed',
     program: Program.PostHogIntegration,
     screen: ScreenId.Mcp,
-    ready: (_, frame) => frame.includes('Press enter'),
+    ready: (_, frame) => frame.includes('Add the PostHog MCP to your coding'),
     arrange: (s) => {
       confirmed(s);
       authed(s);
       ran(s);
       s.setOutroDismissed();
     },
-    keys: [ENTER],
+    // Agree to the install, then leave the results.
+    keys: [ENTER, ENTER],
     action: 'set_mcp_outcome',
     params: { outcome: 'installed', clients: ['Cursor', 'Claude Code'] },
+  },
+  {
+    name: 'mcp: esc on the install question vs set_mcp_outcome skipped',
+    program: Program.PostHogIntegration,
+    screen: ScreenId.Mcp,
+    ready: (_, frame) => frame.includes('Add the PostHog MCP to your coding'),
+    arrange: (s) => {
+      confirmed(s);
+      authed(s);
+      ran(s);
+      s.setOutroDismissed();
+    },
+    keys: [ESC],
+    action: 'set_mcp_outcome',
+    params: { outcome: 'skipped' },
   },
   {
     name: 'slack-connect: skip vs dismiss_slack',

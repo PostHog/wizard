@@ -93,7 +93,11 @@ export function createScreens(
     [ScreenId.ProjectPicker]: <ProjectPickerScreen store={store} />,
     [ScreenId.Run]: <RunScreen store={store} />,
     [ScreenId.Mcp]: (
-      <McpScreen store={store} installer={services.mcpInstaller} />
+      <McpScreen
+        store={store}
+        installer={services.mcpInstaller}
+        confirmInstall
+      />
     ),
     [ScreenId.SlackConnect]: <SlackConnectScreen store={store} />,
     [ScreenId.Outro]: <OutroScreen store={store} />,

@@ -5,8 +5,9 @@
  * importing business logic directly. Testable, no dynamic imports.
  *
  * Supports two modes via the `mode` prop:
- *   - 'install': detect clients → install in every local client → results
- *     → open the connector page of each account client the user picks
+ *   - 'install': detect clients → (with `confirmInstall`, ask first) → install
+ *     in every local client → results → open the connector page of each
+ *     account client the user picks
  *   - 'remove': detect installed local clients → pick which (esc cancels) → remove
  *
  * A successful install ends on one screen: a row per client, any login
@@ -50,6 +51,12 @@ interface McpScreenProps {
   samplePrompts?: string[];
   /** The last menu item, which leaves the screen. `mcp add` says Exit. */
   exitLabel?: string;
+  /**
+   * Ask before writing to any coding agent's user-wide config. The setup flow
+   * sets it: there the install is a side step the user didn't ask for. `mcp
+   * add` leaves it off, since running that command is the request.
+   */
+  confirmInstall?: boolean;
 }
 
 enum Phase {
@@ -309,6 +316,7 @@ export const McpScreen = ({
   mode = 'install',
   samplePrompts = [],
   exitLabel = 'Continue',
+  confirmInstall = false,
 }: McpScreenProps) => {
   useSyncExternalStore(
     (cb) => store.subscribe(cb),
@@ -385,6 +393,9 @@ export const McpScreen = ({
         } else if (local.length === 0) {
           setClients(detected);
           setPhase(Phase.Assistants);
+        } else if (confirmInstall) {
+          setClients(detected);
+          setPhase(Phase.Ask);
         } else {
           setClients(detected);
           void installAll(local);
@@ -607,7 +618,23 @@ export const McpScreen = ({
       : [],
   );
 
-  // The remove picker has no escape binding of its own; esc removes nothing.
+  /** The user declined the install: write nothing, and go on to the assistants. */
+  const declineInstall = () => {
+    if (accountClients.length === 0) {
+      markDone(store, McpOutcome.Skipped);
+      return;
+    }
+    stepOne.current = {
+      outcome: McpOutcome.Skipped,
+      ready: [],
+      features: reportFeatures(store.mcpFeatures ?? [...ALL_FEATURE_VALUES]),
+      logins: [],
+    };
+    setPhase(Phase.Assistants);
+  };
+
+  // The pickers have no escape binding of their own; esc removes or installs
+  // nothing.
   useKeyBindings(
     'mcp-remove-cancel',
     phase === Phase.Ask
@@ -616,7 +643,9 @@ export const McpScreen = ({
             match: KeyMatch.Escape,
             label: 'esc',
             action: 'cancel',
-            handler: () => markDone(store, McpOutcome.Skipped),
+            handler: isRemove
+              ? () => markDone(store, McpOutcome.Skipped)
+              : declineInstall,
           },
         ]
       : [],
@@ -660,6 +689,8 @@ export const McpScreen = ({
 
   const heading = isRemove
     ? 'Remove the PostHog MCP'
+    : phase === Phase.Ask
+    ? 'Add the PostHog MCP to your coding agents?'
     : phase === Phase.Assistants
     ? 'Connect PostHog to your AI assistants'
     : phase !== Phase.Done
@@ -742,7 +773,33 @@ export const McpScreen = ({
             </Text>
           ))}
 
-        {phase === Phase.Ask && (
+        {phase === Phase.Ask && !isRemove && (
+          <Box flexDirection="column">
+            <Box marginBottom={1} flexDirection="column">
+              <Text>
+                Found {plural(localClients.length, 'coding agent')}:{' '}
+                {localClients.map((c) => c.name).join(', ')}.
+              </Text>
+              <Text dimColor>
+                Adding it writes a posthog server to each agent&apos;s own
+                config, outside this project.
+              </Text>
+            </Box>
+            <PickerMenu
+              options={[
+                { label: 'Add the PostHog MCP', value: 'install' },
+                { label: 'Skip', value: 'skip' },
+              ]}
+              onSelect={(value) => {
+                const picked = Array.isArray(value) ? value[0] : value;
+                if (picked === 'install') void installAll(localClients);
+                else declineInstall();
+              }}
+            />
+          </Box>
+        )}
+
+        {phase === Phase.Ask && isRemove && (
           <PickerMenu
             message="Select the coding agents to remove the PostHog MCP from"
             mode="multi"
