@@ -15,12 +15,14 @@ import path from 'path';
 import { mayReportDiscovery } from '@shared/run-state';
 import { VERSION } from '@shared/version';
 import { analytics } from '@utils/analytics';
+import { logToFile } from '@utils/debug';
 import type { WizardSession } from '../session/wizard-session';
 import { detectedEmailProviders } from './email-providers';
 import { workspaceFingerprint } from './fingerprint';
 import { getDiscovery, type Discovery } from './discover';
 import { applyDiscoveryTags } from './tags';
 import { toolsUnder } from './tools';
+import { summarizePosthogSdks } from './traits/sdks';
 import type { DiscoveryReport } from '../session/task-stream/types';
 
 /** The store surface reporting needs; `SessionStore` provides it. */
@@ -60,16 +62,51 @@ export function reportDiscovery(store: DiscoveryReportStore): void {
   store.markWarehouseSourcesReportedIfNeeded();
 
   if (!mayReportDiscovery(session)) return;
+  const discovery = getDiscovery(session);
+  let sdkSummary: ReturnType<typeof summarizePosthogSdks> | null = null;
+  if (discovery) {
+    try {
+      sdkSummary = summarizeRunSdks(session, discovery);
+    } catch (error) {
+      logToFile('[discovery] sdk summary failed:', error);
+    }
+  }
+  if (sdkSummary) applySdkTags(sdkSummary);
+
   const { credentials } = session;
   if (!credentials) return;
 
   if (session.discoveryReport) return;
-  const discovery = getDiscovery(session);
   // A failed tool match found nothing because it could not look. Posting its
   // empty list would read as "every tool was removed".
   if (!discovery || discovery.tools.failed) return;
   if (session.apiUser) reportEmailProviders(discovery);
+  if (sdkSummary) analytics.wizardCapture('posthog sdks detected', sdkSummary);
   store.shareDiscovery(buildDiscoveryReport(discovery, credentials.projectId));
+}
+
+function summarizeRunSdks(session: WizardSession, discovery: Discovery) {
+  const prefix = session.runProject === '.' ? '' : `${session.runProject}/`;
+  return summarizePosthogSdks(
+    discovery.files.manifests.filter(
+      (m) =>
+        m.dir !== null &&
+        (prefix === '' ||
+          m.dir === session.runProject ||
+          m.dir.startsWith(prefix)),
+    ),
+  );
+}
+
+function applySdkTags(summary: ReturnType<typeof summarizePosthogSdks>): void {
+  analytics.setTag('has_existing_sdk', summary.has_existing_sdk);
+  analytics.setTag('detected_sdk_count', summary.detected_sdk_count);
+  if (summary.sdk_version_found) {
+    analytics.setTag('sdk_version_found', summary.sdk_version_found);
+  }
+  if (summary.sdk_version_pin) {
+    analytics.setTag('sdk_version_pin', summary.sdk_version_pin);
+  }
 }
 
 function reportEmailProviders(discovery: Discovery): void {

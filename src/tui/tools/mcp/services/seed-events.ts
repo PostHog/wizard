@@ -178,12 +178,43 @@ export async function seedDemoEvents(args: {
   );
 
   const { PostHog } = await import('posthog-node');
+  let transportError: unknown;
   const client = new PostHog(projectApiKey, {
     host: apiHost,
-    // Send everything in one batch on shutdown; no background timer.
-    flushAt: events.length,
+    // Keep flushAt above the batch size so capture() only queues and shutdown() performs one drain.
+    flushAt: events.length + 1,
     flushInterval: 0,
     disableGeoip: true,
+    fetch: async (url, init) => {
+      if (signal?.aborted) {
+        // Non-retryable sentinel so posthog-node stops immediately; aborted check below throws.
+        return new Response(null, { status: 499 });
+      }
+      const mergedSignal =
+        signal && init.signal
+          ? AbortSignal.any([init.signal, signal])
+          : signal ?? init.signal;
+      try {
+        return await fetch(url, {
+          ...init,
+          signal: mergedSignal,
+        } as Parameters<typeof fetch>[1]);
+      } catch (err) {
+        if (signal?.aborted) {
+          return new Response(null, { status: 499 });
+        }
+        transportError ??= err;
+        throw err;
+      }
+    },
+  });
+
+  // posthog-node v6 resolves shutdown() even when delivery fails or events
+  // are dropped, reporting failures via 'error'. Capture the first one so
+  // callers still see a rejected send.
+  let deliveryError: unknown;
+  client.on('error', (err) => {
+    deliveryError ??= err;
   });
 
   try {
@@ -208,6 +239,17 @@ export async function seedDemoEvents(args: {
   }
 
   if (signal?.aborted) throw new Error('Seeding aborted');
+
+  if (deliveryError) {
+    if (
+      deliveryError instanceof Error &&
+      !deliveryError.cause &&
+      transportError
+    ) {
+      deliveryError.cause = transportError;
+    }
+    throw deliveryError;
+  }
 
   return seededProfile(baseProfile, now);
 }

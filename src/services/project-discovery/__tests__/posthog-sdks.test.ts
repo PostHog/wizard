@@ -28,6 +28,7 @@ import {
   sdkFeatureGaps,
   VERSIONED_SDK_SKILLS_ENABLED_KEY,
 } from '@services/project-discovery';
+import { summarizePosthogSdks } from '@services/project-discovery/traits/sdks';
 import { SessionStore } from '@services/session/session-store';
 import { buildSession } from '@services/session/wizard-session';
 
@@ -134,5 +135,158 @@ describe('PostHog SDK versions', () => {
     const session = await nodeProject('^4.3.0', false);
     expect(getTraits(session).posthogSdks).toBeUndefined();
     expect(sdkFeatureGaps(session, ['errorTracking'])).toEqual([]);
+  });
+
+  it('summarizes existing SDK presence, minor versions, and pin styles for telemetry', () => {
+    expect(summarizePosthogSdks([])).toEqual({
+      has_existing_sdk: false,
+      detected_sdk_count: 0,
+      unversioned_sdk_count: 0,
+      detected_sdks: [],
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'package.json',
+          ecosystem: 'npm',
+          packages: ['posthog-node'],
+          versions: { 'posthog-node': '^4.3.2' },
+        },
+      ]),
+    ).toEqual({
+      has_existing_sdk: true,
+      sdk_version_found: 'npm:posthog-node@4.3',
+      sdk_version_pin: 'major_range',
+      detected_sdk_count: 1,
+      unversioned_sdk_count: 0,
+      detected_sdks: ['npm:posthog-node'],
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'package.json',
+          ecosystem: 'npm',
+          packages: ['posthog-node'],
+          versions: { 'posthog-node': '4.3.0' },
+        },
+        {
+          dir: '.',
+          path: 'requirements.txt',
+          ecosystem: 'pypi',
+          packages: ['posthog'],
+          versions: { posthog: '>=6' },
+        },
+        {
+          dir: '.',
+          path: 'Gemfile',
+          ecosystem: 'rubygems',
+          packages: ['posthog-ruby'],
+          versions: {},
+        },
+      ]),
+    ).toEqual({
+      has_existing_sdk: true,
+      sdk_version_found: 'npm:posthog-node@4.3,pypi:posthog@6.0',
+      sdk_version_pin: 'mixed',
+      detected_sdk_count: 3,
+      unversioned_sdk_count: 1,
+      detected_sdks: [
+        'npm:posthog-node',
+        'pypi:posthog',
+        'rubygems:posthog-ruby',
+      ],
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'requirements.txt',
+          ecosystem: 'pypi',
+          packages: ['posthog'],
+          versions: { posthog: '==7.40.0' },
+        },
+      ]),
+    ).toMatchObject({
+      sdk_version_found: 'pypi:posthog@7.40',
+      sdk_version_pin: 'exact',
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'requirements.txt',
+          ecosystem: 'pypi',
+          packages: ['posthog'],
+          versions: { posthog: '>=6' },
+        },
+      ]),
+    ).toMatchObject({
+      sdk_version_found: 'pypi:posthog@6.0',
+      sdk_version_pin: 'wide_range',
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'package.json',
+          ecosystem: 'npm',
+          packages: ['posthog-node'],
+          versions: { 'posthog-node': 'workspace:*' },
+        },
+      ]),
+    ).toEqual({
+      has_existing_sdk: true,
+      sdk_version_pin: 'none',
+      detected_sdk_count: 1,
+      unversioned_sdk_count: 1,
+      detected_sdks: ['npm:posthog-node'],
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'Cargo.toml',
+          ecosystem: 'cargo',
+          packages: ['posthog-rs'],
+          versions: { 'posthog-rs': '0.3.5' },
+        },
+      ]),
+    ).toMatchObject({
+      sdk_version_found: 'cargo:posthog-rs@0.3',
+      sdk_version_pin: 'major_range',
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'Cargo.toml',
+          ecosystem: 'cargo',
+          packages: ['posthog-rs'],
+          versions: { 'posthog-rs': '=0.3.5' },
+        },
+      ]),
+    ).toMatchObject({
+      sdk_version_found: 'cargo:posthog-rs@0.3',
+      sdk_version_pin: 'exact',
+    });
+    expect(
+      summarizePosthogSdks([
+        {
+          dir: '.',
+          path: 'package.json',
+          ecosystem: 'npm',
+          packages: ['posthog-node'],
+          versions: { 'posthog-node': `>=${Number.MAX_SAFE_INTEGER}.0.0` },
+        },
+      ]),
+    ).toEqual({
+      has_existing_sdk: true,
+      sdk_version_pin: 'none',
+      detected_sdk_count: 1,
+      unversioned_sdk_count: 1,
+      detected_sdks: ['npm:posthog-node'],
+    });
   });
 });
