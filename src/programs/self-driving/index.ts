@@ -13,7 +13,7 @@ import { buildSelfDrivingPrompt } from './prompt.js';
 import { resolveSelfDrivingStepKey } from './step-keys.js';
 import { resolveProjectDir } from '@services/detection';
 import { prepSelfDrivingIntegration } from './detect-agentic.js';
-import { NO_DEFAULT_LIMIT, PRICE_PER_PR_USD, PRICING_LONG } from './pricing.js';
+import { PRICING_LONG, SPEND_LIMIT } from './pricing.js';
 import { SELF_DRIVING_SCOPE_ADDITIONS } from './scopes.js';
 
 /** Absolute dir to integrate into: the picked sub-app (LLM output — the shared resolver clamps escapes), else the repo root. */
@@ -82,12 +82,12 @@ const buildRun = (session: ProgramSession): Promise<ProgramRun> =>
           items: [
             'Investigate reports with the agent',
             'Tag teammates to loop them in',
-            `Kick off a PR when you like the proposed fix ($${PRICE_PER_PR_USD} flat)`,
-            'Cap the spend with a monthly PR limit in the sidebar',
+            'Kick off a PR when you like the proposed fix',
+            'Cap the spend with a billing limit in your billing settings',
             'Or work from Slack (tag @PostHog) and MCP',
           ],
         },
-        body: `${PRICING_LONG} ${NO_DEFAULT_LIMIT}`,
+        body: `${PRICING_LONG} ${SPEND_LIMIT}`,
         reportFile: REPORT_FILE,
       };
     },
@@ -135,7 +135,7 @@ export {
   type SelfDrivingDetectError,
 } from './detect.js';
 
-export { NO_DEFAULT_LIMIT, PRICING_LONG, PRICING_SHORT } from './pricing.js';
+export { PRICING_LONG, PRICING_SHORT, SPEND_LIMIT } from './pricing.js';
 export {
   detectSelfDrivingIntegrationProjects,
   type IntegrationDetectionReport,

@@ -21,7 +21,7 @@ import {
   sharingOptions,
 } from '@tui/components/sharing-options';
 import {
-  NO_DEFAULT_LIMIT,
+  SPEND_LIMIT,
   PRICING_LONG,
   PRICING_SHORT,
 } from '@programs/self-driving';
@@ -84,7 +84,7 @@ export const SelfDrivingIntroScreen = ({
       </Box>
       <Box flexDirection="column" marginTop={1}>
         <Text>{PRICING_LONG}</Text>
-        <Text>{NO_DEFAULT_LIMIT}</Text>
+        <Text>{SPEND_LIMIT}</Text>
       </Box>
     </Box>
   ) : (

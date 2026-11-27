@@ -1,4 +1,4 @@
-import { NO_DEFAULT_LIMIT, PRICING_LONG } from '@programs/self-driving';
+import { SPEND_LIMIT, PRICING_LONG } from '@programs/self-driving';
 /**
  * Self-driving learn-deck — the narrative script played while the agent
  * sets up Self-driving. Teaches the vocabulary ladder (signal source →
@@ -176,14 +176,13 @@ export const getContentBlocks = (store?: WizardStore): ContentBlock[] => {
     },
 
     {
-      // No lead-in: PRICING_LONG already names the PR as what's charged, and the
-      // pane only fits ~148 chars per beat.
+      // No lead-in: the pane only fits ~148 chars per beat.
       content: PRICING_LONG,
       pause: 5000,
     },
 
     {
-      content: NO_DEFAULT_LIMIT,
+      content: SPEND_LIMIT,
       pause: 5000,
     },
 
