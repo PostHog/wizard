@@ -202,6 +202,7 @@ export const CONTEXT_MILL_URL = 'https://github.com/PostHog/context-mill';
 export const CONTEXT_MILL_RELEASES_URL =
   'https://github.com/PostHog/context-mill/releases/latest';
 export const POSTHOG_DOCS_URL = 'https://posthog.com/docs';
+export const POSTHOG_INSTALL_DOCS_URL = `${POSTHOG_DOCS_URL}/getting-started/install`;
 export const POSTHOG_WIZARD_REPO_URL = 'https://github.com/PostHog/wizard';
 export const POSTHOG_TERMS_URL = 'https://posthog.com/terms';
 export const POSTHOG_PRIVACY_URL = 'https://posthog.com/privacy';

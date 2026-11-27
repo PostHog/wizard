@@ -18,8 +18,12 @@ import {
   findProgramConfig,
   pickLeavesRunProject,
 } from '@programs';
-import { Integration } from '@shared/constants';
-import { PickerMenu, LoadingBox } from '@tui/primitives/index';
+import { Integration, POSTHOG_INSTALL_DOCS_URL } from '@shared/constants';
+import {
+  PickerMenu,
+  LoadingBox,
+  type PickerOption,
+} from '@tui/primitives/index';
 import {
   IntroScreenLayout,
   type DetectionRow,
@@ -67,19 +71,23 @@ const FrameworkPicker = ({
   store: WizardStore;
   onComplete?: () => void;
 }) => {
-  const options = Object.values(Integration).map((value) => ({
-    label: value,
-    value,
-  }));
+  const options: PickerOption<Integration | 'cancel'>[] = [
+    ...Object.values(Integration).map((value) => ({ label: value, value })),
+    { label: 'Cancel', value: 'cancel' },
+  ];
 
   return (
-    <PickerMenu<Integration>
+    <PickerMenu<Integration | 'cancel'>
       centered
       columns={2}
       message="Select your framework"
       options={options}
       onSelect={(value) => {
         const integration = Array.isArray(value) ? value[0] : value;
+        if (integration === 'cancel') {
+          store.requestExit(0);
+          return;
+        }
         void import('@programs').then(({ FRAMEWORK_REGISTRY }) => {
           const config = FRAMEWORK_REGISTRY[integration];
           store.setFrameworkConfig(integration, config);
@@ -166,8 +174,12 @@ export const PostHogIntegrationIntroScreen = ({
   } else if (needsFrameworkPick && !pickingFramework) {
     body = (
       <>
-        <Box marginY={1}>
+        <Box marginY={1} flexDirection="column" alignItems="center">
           <Text dimColor>Could not auto-detect your framework.</Text>
+          <Text dimColor>
+            Pick your framework below, or set PostHog up by hand:
+          </Text>
+          <Text color="cyan">{POSTHOG_INSTALL_DOCS_URL}</Text>
         </Box>
         <FrameworkPicker
           store={store}
