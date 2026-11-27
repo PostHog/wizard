@@ -27,8 +27,11 @@ whole run with `ETARGET`, and guessing another just fails again. The only versio
 write by hand is one copied from the library doc, and only in the environment
 fallback below.
 
-Add the client library, plus the server library if the app has server-side code
-that sends events. If the SDK is already installed, leave it and say so.
+Add the client library. Add the server library too where the app has server-side
+code in which user actions complete: API routes, server actions, webhook handlers,
+auth and payment endpoints. Decide from where the work happens, not from where
+events are sent today: a project with no PostHog yet sends none. If the SDK is
+already installed, leave it and say so.
 
 Where a web app or other application sits beside an MCP server (the detected facts
 name any MCP server), install for the app, in its own package. Review installs what a
