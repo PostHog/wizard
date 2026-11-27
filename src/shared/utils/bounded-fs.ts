@@ -183,6 +183,11 @@ export interface WalkOptions {
   followSymlinks?: boolean;
   /** A directory the walk does not enter, by full path. */
   skipDir?: (fullPath: string) => boolean;
+  /**
+   * Mark the walk incomplete (return `false`) when a non-ignored subdirectory
+   * is pruned because it exceeds `maxDepth`. Defaults to false.
+   */
+  incompleteOnDepthLimit?: boolean;
 }
 
 /**
@@ -201,7 +206,11 @@ export function walkProjectFiles(
   rootDir: string,
   onFile: (name: string, fullPath: string) => void,
   maxDepth = 3,
-  { followSymlinks = true, skipDir }: WalkOptions = {},
+  {
+    followSymlinks = true,
+    skipDir,
+    incompleteOnDepthLimit = false,
+  }: WalkOptions = {},
 ): boolean {
   const visited = new Set<string>();
   let filesSeen = 0;
@@ -273,7 +282,11 @@ export function walkProjectFiles(
         if (isDir) {
           if (entry.name.startsWith('.')) continue; // skip hidden directories
           if (skipDir?.(fullPath)) continue;
-          if (depth < maxDepth) stack.push({ dir: fullPath, depth: depth + 1 });
+          if (depth < maxDepth) {
+            stack.push({ dir: fullPath, depth: depth + 1 });
+          } else if (incompleteOnDepthLimit) {
+            complete = false;
+          }
         } else if (isFile) {
           filesSeen += 1;
           onFile(entry.name, fullPath);
@@ -299,7 +312,8 @@ export function readProjectFile(
   maxBytes = MAX_PROJECT_FILE_BYTES,
 ): string | null {
   try {
-    if (fs.statSync(filePath).size > maxBytes) return null;
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile() || stat.size > maxBytes) return null;
     return fs.readFileSync(filePath, 'utf-8');
   } catch {
     return null;

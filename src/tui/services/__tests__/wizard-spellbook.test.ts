@@ -158,4 +158,29 @@ describe('writeWizardSpellbook', () => {
       fs.stat(path.join(path.dirname(rejected.path), 'skills', skill.id)),
     ).rejects.toThrow();
   });
+
+  it('uses top-level program.docsUrl when program.run is a function', async () => {
+    vi.mocked(fetchSkillMenu).mockResolvedValue(null);
+    const dynamicProgram: ProgramConfig = {
+      id: 'ai-observability',
+      description: 'Add PostHog AI Observability',
+      docsUrl: 'https://posthog.com/docs/ai-observability',
+      run: () =>
+        Promise.resolve({
+          integrationLabel: 'ai-observability',
+          successMessage: 'done',
+          reportFile: 'posthog-ai-observability-report.md',
+          docsUrl: 'https://posthog.com/docs/ai-observability',
+          spinnerMessage: 'working',
+          estimatedDurationMinutes: 5,
+        }),
+    };
+
+    const result = await writeWizardSpellbook(
+      buildSession({ installDir }),
+      dynamicProgram,
+    );
+    const content = await fs.readFile(result.path, 'utf8');
+    expect(content).toContain('https://posthog.com/docs/ai-observability');
+  });
 });

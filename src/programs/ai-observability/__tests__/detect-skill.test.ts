@@ -1,3 +1,4 @@
+import { execFileSync } from 'child_process';
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -187,6 +188,115 @@ describe('detectUnambiguousAioSkill', () => {
   it('returns undefined when no LLM SDK is declared (manual-capture fallback)', () => {
     write('package.json', JSON.stringify({ dependencies: { hono: '^4.0.0' } }));
     expect(detectUnambiguousAioSkill(dir)).toBeUndefined();
+  });
+
+  it('maps unscoped mastra package to ai-observability-mastra', () => {
+    write(
+      'package.json',
+      JSON.stringify({
+        dependencies: { mastra: '^0.10.0', openai: '^4.77.0' },
+      }),
+    );
+    write('src/index.ts', "import { Mastra } from 'mastra';");
+    expect(detectUnambiguousAioSkill(dir)).toBe('ai-observability-mastra');
+  });
+
+  it('returns undefined for Azure OpenAI using the openai SDK', () => {
+    write('requirements.txt', 'openai>=1.50.0\n');
+    write(
+      'app.py',
+      'from openai import AzureOpenAI\nclient = AzureOpenAI(azure_endpoint="https://my.openai.azure.com")\n',
+    );
+    expect(detectUnambiguousAioSkill(dir)).toBeUndefined();
+  });
+
+  it('detects split LangChain and LlamaIndex integration packages as frameworks', () => {
+    write('requirements.txt', 'langchain-openai>=0.2.0\nopenai>=1.50.0\n');
+    expect(detectUnambiguousAioSkill(dir)).toBe(
+      'ai-observability-langchain-python',
+    );
+
+    write(
+      'requirements.txt',
+      'llama-index-core>=0.11.0\nllama-index-llms-openai>=0.2.0\nopenai>=1.50.0\n',
+    );
+    expect(detectUnambiguousAioSkill(dir)).toBe('ai-observability-llamaindex');
+
+    rmSync(join(dir, 'requirements.txt'));
+    write(
+      'package.json',
+      JSON.stringify({
+        dependencies: { '@langchain/openai': '^0.3.0', openai: '^4.77.0' },
+      }),
+    );
+    expect(detectUnambiguousAioSkill(dir)).toBe(
+      'ai-observability-langchain-node',
+    );
+
+    // Exact match @langchain/langgraph is not double-counted by the @langchain/ prefix.
+    write(
+      'package.json',
+      JSON.stringify({
+        dependencies: { '@langchain/langgraph': '^0.2.0' },
+      }),
+    );
+    expect(detectUnambiguousAioSkill(dir)).toBe(
+      'ai-observability-langgraph-node',
+    );
+  });
+
+  it('detects gateway overrides in .env files and .jsx/.mts/.cts sources', () => {
+    write(
+      'package.json',
+      JSON.stringify({ dependencies: { openai: '^4.77.0' } }),
+    );
+    write('.env.local', 'OPENAI_BASE_URL=https://openrouter.ai/api/v1\n');
+    expect(detectUnambiguousAioSkill(dir)).toBeUndefined();
+
+    rmSync(join(dir, '.env.local'));
+    write(
+      'src/client.mts',
+      "new OpenAI({ baseURL: 'https://openrouter.ai/api/v1' });",
+    );
+    expect(detectUnambiguousAioSkill(dir)).toBeUndefined();
+
+    rmSync(join(dir, 'src/client.mts'));
+    write(
+      'src/App.jsx',
+      "new OpenAI({ baseURL: 'https://api.groq.com/openai/v1' });",
+    );
+    expect(detectUnambiguousAioSkill(dir)).toBeUndefined();
+  });
+
+  it('falls back to undefined when source tree exceeds gateway scan depth', () => {
+    write(
+      'package.json',
+      JSON.stringify({ dependencies: { openai: '^4.77.0' } }),
+    );
+    write(
+      'a/b/c/d/e/f/client.ts',
+      "new OpenAI({ baseURL: 'https://openrouter.ai/api/v1' });",
+    );
+    expect(detectUnambiguousAioSkill(dir)).toBeUndefined();
+  });
+
+  it('skips symlinked manifests pointing to a FIFO without blocking', () => {
+    if (process.platform === 'win32') return;
+    write(
+      'package.json',
+      JSON.stringify({ dependencies: { openai: '^4.77.0' } }),
+    );
+    const fifoPath = join(dir, 'pipe.fifo');
+    execFileSync('mkfifo', [fifoPath]);
+    symlinkSync(fifoPath, join(dir, 'requirements.txt'));
+
+    expect(detectUnambiguousAioSkill(dir)).toBe('ai-observability-openai-node');
+  });
+
+  it('exposes static docsUrl on ai-observability ProgramConfig', () => {
+    expect(aioProgramConfig.docsUrl).toBe(
+      'https://posthog.com/docs/ai-observability',
+    );
   });
 
   it('wires optional pre-install and prompt fallback through ai-observability config.run()', async () => {

@@ -4,6 +4,7 @@ import { headlessOption, regionOption } from '@shared/headless-mode';
 import { detectUnambiguousAioSkill } from './detect-skill';
 
 const AI_OBSERVABILITY_REPORT_FILE = 'posthog-ai-observability-report.md';
+const AI_OBSERVABILITY_DOCS_URL = 'https://posthog.com/docs/ai-observability';
 
 function buildAioPrompt(preinstalledSkillId?: string): string {
   const skillStep = preinstalledSkillId
@@ -62,6 +63,7 @@ export const config: ProgramConfig = {
   sdkFeature: 'aiObservability',
   cliOptions: { ...headlessOption, ...regionOption },
   reportFile: AI_OBSERVABILITY_REPORT_FILE,
+  docsUrl: AI_OBSERVABILITY_DOCS_URL,
   run: (session) => {
     const skillId = detectUnambiguousAioSkill(session.installDir);
     return Promise.resolve({
@@ -71,7 +73,7 @@ export const config: ProgramConfig = {
         buildAioPrompt(ctx.skillPath ? skillId : undefined),
       successMessage: `AI Observability configured! View the report at ./${AI_OBSERVABILITY_REPORT_FILE}`,
       reportFile: AI_OBSERVABILITY_REPORT_FILE,
-      docsUrl: 'https://posthog.com/docs/ai-observability',
+      docsUrl: AI_OBSERVABILITY_DOCS_URL,
       spinnerMessage: 'Setting up AI Observability...',
       estimatedDurationMinutes: 5,
     });

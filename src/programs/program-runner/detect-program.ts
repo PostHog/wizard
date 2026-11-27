@@ -155,6 +155,7 @@ export function detectionFailure(
   if (!detectError) return null;
   const code = detectErrorCode(detectError.kind);
   const docsUrl =
+    config.docsUrl ??
     (typeof config.run === 'object' ? config.run.docsUrl : undefined) ??
     POSTHOG_DOCS_URL;
   return {

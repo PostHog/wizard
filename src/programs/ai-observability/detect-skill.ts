@@ -12,7 +12,7 @@
 
 import { existsSync } from 'fs';
 import { extname, join } from 'path';
-import { readProjectFile, walkProjectFiles } from '@utils/bounded-fs';
+import { safeReadFile, walkProjectFiles } from '@utils/bounded-fs';
 import { parsePackageJson } from '@utils/package-json';
 import {
   parsePyprojectToml,
@@ -27,10 +27,16 @@ const NODE_FRAMEWORK_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ['langchain', 'ai-observability-langchain-node'],
   ['ai', 'ai-observability-vercel-ai'],
   ['llamaindex', 'ai-observability-llamaindex'],
+  ['mastra', 'ai-observability-mastra'],
   ['@mastra/core', 'ai-observability-mastra'],
   ['@google/adk', 'ai-observability-google-adk'],
   ['@instructor-ai/instructor', 'ai-observability-instructor-node'],
   ['convex', 'ai-observability-convex'],
+];
+
+const NODE_FRAMEWORK_PREFIXES: ReadonlyArray<readonly [string, string]> = [
+  ['@langchain/', 'ai-observability-langchain-node'],
+  ['@llamaindex/', 'ai-observability-llamaindex'],
 ];
 
 const NODE_PROVIDER_SKILLS: ReadonlyArray<readonly [string, string]> = [
@@ -63,6 +69,11 @@ const PYTHON_FRAMEWORK_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ['litellm', 'ai-observability-litellm'],
 ];
 
+const PYTHON_FRAMEWORK_PREFIXES: ReadonlyArray<readonly [string, string]> = [
+  ['langchain-', 'ai-observability-langchain-python'],
+  ['llama-index-', 'ai-observability-llamaindex'],
+];
+
 const PYTHON_PROVIDER_SKILLS: ReadonlyArray<readonly [string, string]> = [
   ['openai', 'ai-observability-openai-python'],
   ['anthropic', 'ai-observability-anthropic-python'],
@@ -74,10 +85,26 @@ const PYTHON_PROVIDER_SKILLS: ReadonlyArray<readonly [string, string]> = [
 ];
 
 const GATEWAY_OVERRIDE_RE =
-  /\b(OPENAI_BASE_URL|baseURL|base_url)\b|api\.groq\.com|openrouter\.ai|api\.together\.xyz|localhost:11434/;
-const CODE_EXTS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.py']);
+  /\b(OPENAI_BASE_URL|baseURL|base_url|AzureOpenAI|azure_endpoint|azureEndpoint|AZURE_OPENAI_ENDPOINT|AZURE_OPENAI_API_KEY)\b|api\.groq\.com|openrouter\.ai|api\.together\.xyz|localhost:11434|openai\.azure\.com/;
+const CODE_EXTS = new Set([
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.py',
+]);
 export const MAX_GATEWAY_SCAN_FILES = 200;
 const GATEWAY_SCAN_DEPTH = 5;
+
+function isGatewayScanTarget(name: string): boolean {
+  return (
+    name === '.env' || name.startsWith('.env.') || CODE_EXTS.has(extname(name))
+  );
+}
 
 function parsePyDeps(installDir: string): Map<string, string[]> {
   const deps = new Map<string, string[]>();
@@ -92,10 +119,10 @@ function parsePyDeps(installDir: string): Map<string, string[]> {
     }
   };
 
-  const req = readProjectFile(join(installDir, 'requirements.txt'));
+  const req = safeReadFile(join(installDir, 'requirements.txt'));
   if (req) record(parseRequirementsTxt(req));
 
-  const pyproject = readProjectFile(join(installDir, 'pyproject.toml'));
+  const pyproject = safeReadFile(join(installDir, 'pyproject.toml'));
   if (pyproject) record(parsePyprojectToml(pyproject));
 
   return deps;
@@ -108,8 +135,9 @@ function isPreOneOpenAi(spec: string | undefined): boolean {
 }
 
 /**
- * Returns true if any scanned source file configures a custom gateway/baseURL
- * override OR if the project exceeds the bounded scan cap (conservative fallback).
+ * Returns true if any scanned source or `.env*` file configures a custom
+ * gateway/Azure/baseURL override OR if the project exceeds the bounded scan
+ * depth or file cap (conservative fallback).
  */
 function mayHaveGatewayOverride(
   installDir: string,
@@ -123,19 +151,19 @@ function mayHaveGatewayOverride(
     installDir,
     (name, fullPath) => {
       if (found || capped) return;
-      if (!CODE_EXTS.has(extname(name))) return;
+      if (!isGatewayScanTarget(name)) return;
       scanned += 1;
       if (scanned > maxScanFiles) {
         capped = true;
         return;
       }
-      const content = readProjectFile(fullPath);
+      const content = safeReadFile(fullPath);
       if (content && GATEWAY_OVERRIDE_RE.test(content)) {
         found = true;
       }
     },
     GATEWAY_SCAN_DEPTH,
-    { followSymlinks: false },
+    { followSymlinks: false, incompleteOnDepthLimit: true },
   );
 
   return found || capped || !complete;
@@ -144,10 +172,26 @@ function mayHaveGatewayOverride(
 function uniqueMatches(
   depNames: ReadonlySet<string>,
   table: ReadonlyArray<readonly [string, string]>,
+  prefixes: ReadonlyArray<readonly [string, string]> = [],
 ): string[] {
   const hits = new Set<string>();
+  const exactMatched = new Set<string>();
   for (const [pkg, skillId] of table) {
-    if (depNames.has(pkg)) hits.add(skillId);
+    if (depNames.has(pkg)) {
+      hits.add(skillId);
+      exactMatched.add(pkg);
+    }
+  }
+  if (prefixes.length > 0) {
+    for (const dep of depNames) {
+      if (exactMatched.has(dep)) continue;
+      for (const [prefix, skillId] of prefixes) {
+        if (dep.startsWith(prefix)) {
+          hits.add(skillId);
+          break;
+        }
+      }
+    }
   }
   return [...hits];
 }
@@ -168,7 +212,7 @@ export function detectUnambiguousAioSkill(
     return undefined;
   }
 
-  const pkgText = readProjectFile(join(installDir, 'package.json'));
+  const pkgText = safeReadFile(join(installDir, 'package.json'));
   const pkg = pkgText ? parsePackageJson(pkgText) : null;
   if (pkg && 'workspaces' in pkg && pkg.workspaces) return undefined;
 
@@ -186,9 +230,17 @@ export function detectUnambiguousAioSkill(
   const nodeSet = new Set(nodeDeps.keys());
   const pySet = new Set(pyDeps.keys());
 
-  const nodeFrameworks = uniqueMatches(nodeSet, NODE_FRAMEWORK_SKILLS);
+  const nodeFrameworks = uniqueMatches(
+    nodeSet,
+    NODE_FRAMEWORK_SKILLS,
+    NODE_FRAMEWORK_PREFIXES,
+  );
   const nodeProviders = uniqueMatches(nodeSet, NODE_PROVIDER_SKILLS);
-  const pyFrameworks = uniqueMatches(pySet, PYTHON_FRAMEWORK_SKILLS);
+  const pyFrameworks = uniqueMatches(
+    pySet,
+    PYTHON_FRAMEWORK_SKILLS,
+    PYTHON_FRAMEWORK_PREFIXES,
+  );
   const pyProviders = uniqueMatches(pySet, PYTHON_PROVIDER_SKILLS);
 
   const hasNode = nodeFrameworks.length > 0 || nodeProviders.length > 0;

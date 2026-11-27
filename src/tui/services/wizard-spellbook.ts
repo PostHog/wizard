@@ -72,7 +72,8 @@ function spellbookText(
 ): string {
   const framework = session.frameworkConfig?.metadata;
   const runDocs =
-    typeof program.run === 'object' ? program.run.docsUrl : undefined;
+    program.docsUrl ??
+    (typeof program.run === 'object' ? program.run.docsUrl : undefined);
   const docs = [
     ...new Set([framework?.docsUrl, runDocs, POSTHOG_DOCS_URL]),
   ].filter((url): url is string => Boolean(url));
