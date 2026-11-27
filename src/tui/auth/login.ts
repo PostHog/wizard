@@ -7,7 +7,7 @@ import type {
 import { analytics } from '@utils/analytics';
 import { logToFile } from '@utils/debug';
 import type { WizardStore } from '@tui/store';
-import { ErrorCodes, WizardError } from '@shared/errors';
+import { classifyRunFailure, ErrorCodes, WizardError } from '@shared/errors';
 import { abortOnScreens } from '@tui/abort';
 import { getOrAskForProjectData } from './project-data.js';
 
@@ -27,16 +27,27 @@ export async function oauthLogin(
     programId,
     completionScopeOptional,
   }).catch(async (error: unknown) => {
+    // Without an abort a login error reaches the TUI host with no credentials set, which ends the run as completed.
     if (
-      !(error instanceof WizardError) ||
-      error.code !== ErrorCodes.AuthProjectFetchFailed
-    )
-      throw error;
-    // Without this abort the error reaches the TUI host with no credentials set, which ends the run as completed.
+      error instanceof WizardError &&
+      error.code === ErrorCodes.AuthProjectFetchFailed
+    ) {
+      return abortOnScreens(store, {
+        code: error.code,
+        message: error.message,
+        error,
+      });
+    }
+    const failure = classifyRunFailure(error);
+    if (failure.coded) throw error;
     return abortOnScreens(store, {
-      code: error.code,
-      message: error.message,
-      error,
+      code: ErrorCodes.AuthLoginFailed,
+      message: failure.message,
+      error: new WizardError(
+        failure.message,
+        undefined,
+        ErrorCodes.AuthLoginFailed,
+      ),
     });
   });
   analytics.wizardCapture('auth complete', { project_id: data.projectId });

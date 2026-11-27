@@ -133,6 +133,17 @@ it('exits without sending the log, saving or launching', async () => {
   expect(services.openAgent).not.toHaveBeenCalled();
 });
 
+it('skips the log question when the carbon unit declined access, offering only Exit', async () => {
+  const { app } = setup(ErrorCodes.AuthAccessDenied, false);
+  await delay();
+  const screenText = app.lastFrame()?.replace(/\s+/g, ' ');
+  expect(screenText).toContain("You didn't authorize the wizard");
+  expect(screenText).not.toContain('Step 1 of 2');
+  expect(screenText).not.toContain('Send your log too?');
+  expect(screenText).toContain('Exit');
+  expect(screenText).not.toContain('Save skill');
+});
+
 it('names the program it reruns when the run was not the integration', async () => {
   const { app, choose } = setup(ErrorCodes.AgentApiError, true, Program.Audit);
   await delay();

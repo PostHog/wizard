@@ -66,7 +66,7 @@ it("passes the program's completion-scope opt-out to the login", async () => {
   );
 });
 
-it('ends the run on a failed project fetch, and passes any other login error through', async () => {
+it('ends the run on a failed project fetch or an uncoded login error, and passes a coded one through', async () => {
   const store = {} as WizardStore;
   const session = buildSession({ installDir: '/project' });
   const fetchFailed = new WizardError(
@@ -85,7 +85,27 @@ it('ends the run on a failed project fetch, and passes any other login error thr
   });
 
   vi.mocked(abortOnScreens).mockClear();
-  vi.mocked(getOrAskForProjectData).mockRejectedValueOnce(new Error('other'));
-  await expect(oauthLogin(session, 'metrics', store)).rejects.toThrow('other');
+  vi.mocked(getOrAskForProjectData).mockRejectedValueOnce(
+    new Error('No OAuth callback ports configured'),
+  );
+  await expect(oauthLogin(session, 'metrics', store)).rejects.toThrow(
+    'aborted',
+  );
+  expect(abortOnScreens).toHaveBeenCalledWith(
+    store,
+    expect.objectContaining({
+      code: ErrorCodes.AuthLoginFailed,
+      message: 'No OAuth callback ports configured',
+    }),
+  );
+
+  vi.mocked(abortOnScreens).mockClear();
+  const coded = new WizardError(
+    'scope',
+    undefined,
+    ErrorCodes.AuthMissingScope,
+  );
+  vi.mocked(getOrAskForProjectData).mockRejectedValueOnce(coded);
+  await expect(oauthLogin(session, 'metrics', store)).rejects.toBe(coded);
   expect(abortOnScreens).not.toHaveBeenCalled();
 });

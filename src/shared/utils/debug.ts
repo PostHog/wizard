@@ -82,7 +82,12 @@ function keepInProcessTail(text: string): void {
   processLogTail += text;
   if (processLogTail.length <= PROCESS_LOG_TAIL_CHARS) return;
   const kept = processLogTail.slice(-PROCESS_LOG_TAIL_CHARS);
-  processLogTail = kept.slice(kept.indexOf('\n') + 1);
+  const firstBreak = kept.indexOf('\n');
+  // A single line longer than the cap has its only break at the end; keep its tail rather than nothing.
+  processLogTail =
+    firstBreak >= 0 && firstBreak < kept.length - 1
+      ? kept.slice(firstBreak + 1)
+      : kept;
 }
 
 // The log's directory isn't guaranteed to exist (Windows %TEMP%,
