@@ -24,5 +24,6 @@ export type {
   ProgramReadyContext,
   ProgramRunStep,
   RankSource,
+  SdkFeature,
 } from './program-step';
 export type { CiRunnerContext, RunnerContext } from './runner-context';

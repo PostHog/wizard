@@ -341,6 +341,9 @@ export const WIZARD_PROJECT_DISCOVERY_FLAG_KEY = 'wizard-project-discovery';
 /** Boolean flag: ONLY an explicit 'true' asks the email provider question after a successful interactive install. */
 export const WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY =
   'wizard-email-provider-offer';
+/** Boolean flag: ONLY an explicit 'true' reads declared PostHog SDK majors as traits and loads the matching SDK skill. */
+export const WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY =
+  'wizard-versioned-sdk-skills';
 // Reading a flag enters this run into that flag's experiment, so a closed set — not a
 // `wizard-` prefix anyone can name into — decides what a run evaluates. Test-pinned exhaustive.
 export const WIZARD_FLAG_KEYS = [
@@ -355,6 +358,7 @@ export const WIZARD_FLAG_KEYS = [
   WIZARD_WAREHOUSE_DESTINATIONS_FLAG_KEY,
   WIZARD_PROJECT_DISCOVERY_FLAG_KEY,
   WIZARD_EMAIL_PROVIDER_OFFER_FLAG_KEY,
+  WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY,
 ] as const;
 /** User-Agent for wizard HTTP requests and MCP server identification. */
 export const WIZARD_USER_AGENT = `posthog/wizard; version: ${VERSION}`;

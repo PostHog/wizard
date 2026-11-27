@@ -19,11 +19,16 @@ import { AGENT_ERROR_CODE } from '../../error-map';
 import { analytics } from '@utils/analytics';
 import { formatYaraAbortMessage, scanInstalledSkill } from '../../yara-hooks';
 import { installSkillById } from '@shared/skill-install';
+import { fetchSkillMenu } from '@shared/skill-menu';
 import { assemblePrompt, type PromptContext } from '../../agent-prompt';
 import type { SequenceResult, SequenceContext } from '../shared/types';
 import { failed, installFailure } from '../shared/errors';
 import { RunOutcome } from '../shared/types';
 import { runOptions } from '../shared/bootstrap';
+import {
+  hasNonFrameworkMatchKeys,
+  installTraitSkills,
+} from '../shared/trait-skills';
 import { shouldDisableAsk } from '@shared/ask-policy';
 import { createEmitSpinner } from '../shared/progress-collector';
 import { createAskBridge } from '../shared/ask';
@@ -86,6 +91,25 @@ async function executeLinear(
     logToFile(`[agent-runner] skill installed at ${skillPath}`);
   }
 
+  let sdkSkillPaths: string[] = [];
+  const matchKeys =
+    !run.readOnly && !run.structured ? boot.matchKeys() : undefined;
+  if (matchKeys && hasNonFrameworkMatchKeys(matchKeys)) {
+    const menu = await fetchSkillMenu(skillsBaseUrl);
+    if (signal?.aborted) return aborted();
+    if (menu) {
+      const traitInstall = await installTraitSkills({
+        entries: Object.values(menu.categories).flat(),
+        matchKeys,
+        installDir: input.installDir,
+        triageProvider: boot.triageProvider,
+        signal,
+      });
+      if (traitInstall.aborted) return aborted();
+      sdkSkillPaths = traitInstall.paths;
+    }
+  }
+
   // 6. Initialize agent
   const spinner = createEmitSpinner(emit);
 
@@ -120,6 +144,7 @@ async function executeLinear(
     projectApiKey,
     host,
     skillPath,
+    sdkSkillPaths,
     facts: config.projectFacts?.() ?? [],
     orgAiDataProcessingApproved:
       input.apiUser?.organization?.is_ai_data_processing_approved ?? null,

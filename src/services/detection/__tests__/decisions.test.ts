@@ -164,12 +164,14 @@ describe('walkRepo', () => {
           dir: '.',
           ecosystem: 'npm',
           packages: ['next'],
+          versions: { next: '15' },
         },
         {
           path: 'apps/api/requirements.txt',
           dir: 'apps/api',
           ecosystem: 'pypi',
           packages: ['django', 'posthog'],
+          versions: { django: '==5.0' },
         },
       ]),
     );

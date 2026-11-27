@@ -229,6 +229,7 @@ person.
 | `warehouseSources` | The kinds of data source found                                                          | The tool match, assigned by path                  |
 | `posthogInstalled` | Whether a PostHog SDK is a dependency                                                   | Manifest lookup                                   |
 | `installedSdks`    | The SDKs in [`traits/sdks.ts`](project-discovery/traits/sdks.ts) the project depends on | Manifest lookup                                   |
+| `posthogSdks`      | Each declared PostHog SDK as `<package>@<major>`, behind `wizard-versioned-sdk-skills`  | Manifest lookup                                   |
 | `projectRole`      | `app`, `library` or `tooling`                                                           | The framework, the workspace and the package name |
 | `workspaceRoot`    | The path of the workspace root the project belongs to; its own path on a root           | Workspace markers                                 |
 | `webFrontend`      | `yes` when the project serves a web UI                                                  | The framework config's `webFrontend`              |
@@ -271,6 +272,14 @@ detection and the `person`. No source outranks another.
 traits skills can match on into match keys. A trait's `matchKey` is `true` to
 key by its own name, or the key to use: `framework` keys as `framework` and
 `frameworkVariant` as `frameworkVariant`, the tags context-mill puts on a skill.
+
+`sdkFeatureGaps`, in
+[`traits/sdk-features.ts`](project-discovery/traits/sdk-features.ts), compares
+the lowest version the run project's manifest allows for each PostHog SDK with
+`SDK_FEATURE_MINIMUMS` in [`traits/sdks.ts`](project-discovery/traits/sdks.ts).
+A program's `sdkFeature` fails the run before any agent starts when the SDK is
+below it; the main run drops the matching task and names the upgrade in its
+outro.
 
 A program's `rankWith` names the model sources that rank its projects beside
 static detection: `decisions`, `agentic`, both or neither.

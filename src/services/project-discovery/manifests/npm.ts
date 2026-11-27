@@ -1,9 +1,9 @@
 import { parsePackageJson as parsePackageJsonText } from '@utils/package-json';
 
-/** Dependency and devDependency names from a `package.json`; null when it does not parse. */
-export function parsePackageJson(content: string): string[] | null {
+/** Dependency and devDependency ranges from a `package.json`, by name; null when it does not parse. */
+export function parsePackageJson(
+  content: string,
+): Record<string, string> | null {
   const pkg = parsePackageJsonText(content);
-  return pkg
-    ? Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })
-    : null;
+  return pkg ? { ...pkg.dependencies, ...pkg.devDependencies } : null;
 }

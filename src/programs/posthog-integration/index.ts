@@ -21,10 +21,16 @@ import { judgeMissingIntegration } from './decisions';
 import { gatherFrameworkContext } from '@services/detection';
 import { noteDetectedFramework } from '@services/detection';
 import { scopeInstallDirToProject } from '@services/detection';
-import { picksProject } from '@services/project-discovery';
+import {
+  getProject,
+  picksProject,
+  sdkFeatureGaps,
+} from '@services/project-discovery';
+import { sdkUpgradeNextSteps } from '../shared/sdk-upgrade-steps';
 import type {
   CiRunnerContext,
   RunnerContext,
+  SdkFeature,
 } from '@programs/program-contract';
 import { FRAMEWORK_REGISTRY } from '@services/frameworks';
 import { abortNoFrameworkDetected } from '../shared/abort-no-framework';
@@ -53,6 +59,24 @@ const WAREHOUSE_SEED_TASK_TYPE = 'warehouse';
 
 /** The `integration-v2` flow's task that instruments the project's MCP server. */
 const MCP_ANALYTICS_TASK_TYPE = 'mcp-analytics';
+
+/** This flow's tasks by the product each sets up, for products with a PostHog SDK minimum. */
+const SDK_FEATURE_TASKS: ReadonlyArray<readonly [string, SdkFeature]> = [
+  ['error-tracking', 'errorTracking'],
+  [MCP_ANALYTICS_TASK_TYPE, 'mcpAnalytics'],
+  ['ai-observability', 'aiObservability'],
+];
+
+/** The products this run would set up for the project, among those with a PostHog SDK minimum. */
+function offeredSdkFeatures(sess: ProgramSession): SdkFeature[] {
+  return [
+    'errorTracking',
+    ...(sess.mcpServerCandidates.length > 0 ? ['mcpAnalytics' as const] : []),
+    ...(getProject(sess).traits.callsLlmApi === 'yes'
+      ? ['aiObservability' as const]
+      : []),
+  ];
+}
 
 /** Candidate paths the MCP fact names before it summarizes the rest. */
 const MCP_FACT_PATH_LIMIT = 5;
@@ -166,6 +190,21 @@ function buildWarehouseNextSteps(
   items.push('Connect them all at once with: npx @posthog/wizard warehouse');
 
   return { heading: 'Query your other data in PostHog:', items };
+}
+
+/** The outro's next steps: products a too-old PostHog SDK skipped, then data sources to connect. */
+function buildNextSteps(
+  sess: ProgramSession,
+  host: HostResolution,
+  projectId: number | string,
+): { heading: string; items: string[] } | undefined {
+  const upgrades = sdkUpgradeNextSteps(sess, offeredSdkFeatures(sess));
+  const warehouse = buildWarehouseNextSteps(sess, host, projectId);
+  if (!upgrades || !warehouse) return upgrades ?? warehouse;
+  return {
+    heading: 'Next steps:',
+    items: [...upgrades.items, ...warehouse.items],
+  };
 }
 
 /**
@@ -326,6 +365,9 @@ export const config: ProgramConfig = {
       : []),
     ...(mcpAnalyticsStepOn(flags, sess) ? [] : [MCP_ANALYTICS_TASK_TYPE]),
     ...(flags[WIZARD_DEFAULT_TRACING_FLAG_KEY] === 'true' ? [] : ['tracing']),
+    ...SDK_FEATURE_TASKS.filter(([, feature]) =>
+      sdkFeatureGaps(sess, [feature]).some((gap) => gap.blocking),
+    ).map(([type]) => type),
   ],
   // The fact exists only beside the task, so no other task acts on it alone.
   detectedFacts: (flags, sess) =>
@@ -551,7 +593,7 @@ ${warehouseReportInstruction(session)}
       },
 
       buildOutroNextSteps: (sess, credentials) =>
-        buildWarehouseNextSteps(sess, credentials.host, credentials.projectId),
+        buildNextSteps(sess, credentials.host, credentials.projectId),
 
       buildOutroData: (sess, credentials) => {
         const envVars = config.environment.getEnvVars(
@@ -571,7 +613,7 @@ ${warehouseReportInstruction(session)}
           changes,
           docsUrl: config.metadata.docsUrl,
           // `buildOutroNextSteps` carries the orchestrated case.
-          nextSteps: buildWarehouseNextSteps(
+          nextSteps: buildNextSteps(
             sess,
             credentials.host,
             credentials.projectId,

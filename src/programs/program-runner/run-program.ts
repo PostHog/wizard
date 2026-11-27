@@ -9,7 +9,11 @@ import type {
   RunInput,
   RunResult,
 } from '@agent/types';
-import { getSkillsBaseUrl, type Integration } from '@shared/constants';
+import {
+  getSkillsBaseUrl,
+  WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY,
+  type Integration,
+} from '@shared/constants';
 import { listSkillFolders, removeRunSkills } from '@shared/skill-install';
 import { classifyRunFailure, ErrorCodes, type ErrorCode } from '@shared/errors';
 import {
@@ -53,9 +57,12 @@ import {
   reportDiscovery,
   reportProjectsDiscovered,
   reportProjectsSelected,
+  sdkFeatureGaps,
+  settleProjects,
   toMatchKeys,
   toTraitKeys,
   type ProjectSelection,
+  VERSIONED_SDK_SKILLS_ENABLED_KEY,
 } from '@services/project-discovery';
 import { detectIntegrationProjects } from '@services/detection';
 import { findProgramConfig, getProgramConfig } from './program-registry';
@@ -427,6 +434,13 @@ async function invokeProgram(
       : 'off';
     // Every Decisions request reads this, so `off` stops them all.
     store.setFrameworkContext(DECISIONS_USE_KEY, use);
+    const versionedSdkSkills =
+      flags.flags[WIZARD_VERSIONED_SDK_SKILLS_FLAG_KEY] === 'true';
+    store.setFrameworkContext(
+      VERSIONED_SDK_SKILLS_ENABLED_KEY,
+      versionedSdkSkills,
+    );
+    if (versionedSdkSkills) settleProjects(store.readyContext());
     // The answers become traits only when the flag says so and project discovery is on.
     const decisionsAsTraits =
       use === 'traits' &&
@@ -572,6 +586,17 @@ async function invokeProgram(
         store.setDetectedFramework(scoped.detectedFrameworkLabel);
       }
       const session = (): WizardSession => scoped ?? store.session;
+      const sdkGap = planned.config.sdkFeature
+        ? sdkFeatureGaps(session(), [planned.config.sdkFeature]).find(
+            (gap) => gap.blocking,
+          )
+        : undefined;
+      if (sdkGap) {
+        return settle(RunOutcome.Failed, {
+          code: ErrorCodes.DetectSdkTooOld,
+          message: sdkGap.message,
+        });
+      }
       const runDir = session().installDir;
       const agentRun =
         ownRun ?? (await resolveRun(planned.config, store, runner, scoped));
