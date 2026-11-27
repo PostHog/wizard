@@ -7,17 +7,17 @@
 
 
 
+  Step 1 of 2
 
-                          ✘ The Wizard's a little busy
+  ✘ The wizard is busy right now
+  The wizard's AI service is busy, so setup stopped before finishing.
+  We got the error automatically.
 
-    The wizard can still share spells. Grab a skill and let your agent take
-    over.
+  Send your log too?
+  It helps us find the cause. We mask the keys and tokens we recognize.
 
-                              ▸ Save skill
-                                Open in Claude Code
-                                Open in Codex
-                                Report this issue
-                                Exit
+                           ▸ Send log and continue
+                             Continue without sending
 
 
 

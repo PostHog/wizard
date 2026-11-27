@@ -3,6 +3,9 @@ vi.mock(import('@utils/analytics'), () => ({
 }));
 vi.mock(import('@utils/debug'));
 vi.mock(import('../project-data'), () => ({ getOrAskForProjectData: vi.fn() }));
+vi.mock(import('@tui/abort'), () => ({
+  abortOnScreens: vi.fn(() => Promise.reject(new Error('aborted'))),
+}));
 
 import { HostResolution } from '@shared/host-resolution';
 import { analytics } from '@utils/analytics';
@@ -10,6 +13,8 @@ import { buildSession } from '@programs';
 import type { WizardStore } from '@tui/store';
 import { oauthCredentials, oauthLogin } from '../login';
 import { getOrAskForProjectData } from '../project-data';
+import { abortOnScreens } from '@tui/abort';
+import { ErrorCodes, WizardError } from '@shared/errors';
 
 const projectData = {
   host: HostResolution.fromRegion('us'),
@@ -59,4 +64,48 @@ it("passes the program's completion-scope opt-out to the login", async () => {
       completionScopeOptional: true,
     }),
   );
+});
+
+it('ends the run on a failed project fetch or an uncoded login error, and passes a coded one through', async () => {
+  const store = {} as WizardStore;
+  const session = buildSession({ installDir: '/project' });
+  const fetchFailed = new WizardError(
+    'could not load project',
+    undefined,
+    ErrorCodes.AuthProjectFetchFailed,
+  );
+  vi.mocked(getOrAskForProjectData).mockRejectedValueOnce(fetchFailed);
+  await expect(oauthLogin(session, 'metrics', store)).rejects.toThrow(
+    'aborted',
+  );
+  expect(abortOnScreens).toHaveBeenCalledWith(store, {
+    code: ErrorCodes.AuthProjectFetchFailed,
+    message: 'could not load project',
+    error: fetchFailed,
+  });
+
+  vi.mocked(abortOnScreens).mockClear();
+  vi.mocked(getOrAskForProjectData).mockRejectedValueOnce(
+    new Error('No OAuth callback ports configured'),
+  );
+  await expect(oauthLogin(session, 'metrics', store)).rejects.toThrow(
+    'aborted',
+  );
+  expect(abortOnScreens).toHaveBeenCalledWith(
+    store,
+    expect.objectContaining({
+      code: ErrorCodes.AuthLoginFailed,
+      message: 'No OAuth callback ports configured',
+    }),
+  );
+
+  vi.mocked(abortOnScreens).mockClear();
+  const coded = new WizardError(
+    'scope',
+    undefined,
+    ErrorCodes.AuthMissingScope,
+  );
+  vi.mocked(getOrAskForProjectData).mockRejectedValueOnce(coded);
+  await expect(oauthLogin(session, 'metrics', store)).rejects.toBe(coded);
+  expect(abortOnScreens).not.toHaveBeenCalled();
 });

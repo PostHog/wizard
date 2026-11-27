@@ -11,8 +11,6 @@
  */
 
 import type { ReactNode } from 'react';
-import path from 'node:path';
-import { getLogFilePath } from '@utils/debug';
 import type { WizardStore } from './store.js';
 import { ScreenId, Overlay, type ScreenName } from './router.js';
 import { listFlowOwners } from './flow-owner.js';
@@ -49,9 +47,6 @@ export interface ScreenServices extends MintFailureServices {
 
 export function createServices(store: WizardStore): ScreenServices {
   return {
-    get logPath() {
-      return path.resolve(getLogFilePath());
-    },
     openAgent: (agent, spellbookPath) =>
       openCodingAgent(agent, store.session.installDir, spellbookPath),
     leaveSpellbook: () =>

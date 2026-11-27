@@ -328,6 +328,12 @@ const MUTATIONS: MutationCase[] = [
     emits: 1,
   },
   {
+    name: 'closeManualAuthCode',
+    prepare: (s) => s.showManualAuthCode(),
+    invoke: (s) => s.closeManualAuthCode(),
+    emits: 1,
+  },
+  {
     name: 'submitManualAuthCode',
     prepare: (s) => s.showManualAuthCode(),
     invoke: (s) => s.submitManualAuthCode('code'),
@@ -550,6 +556,8 @@ const NON_MUTATING = [
   'noteAskProgress',
   // Captures the MCP outcome; holds no session state.
   'reportMcpOutcome',
+  // Captures the failure report; holds no session state.
+  'sendFailureReport',
   'getSnapshot',
   'getVersion',
   'runInitHooks',

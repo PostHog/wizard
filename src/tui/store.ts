@@ -44,6 +44,7 @@ import {
   type ProgramId,
 } from './router.js';
 import { analytics, sessionProperties } from '@utils/analytics';
+import { failureReportProperties } from './mint-failure.js';
 import {
   buildSession,
   findProgramConfig,
@@ -630,6 +631,13 @@ export class WizardStore implements TuiView {
     });
   }
 
+  sendFailureReport(): void {
+    analytics.wizardCapture('failure reported', {
+      ...sessionProperties(this.session),
+      ...failureReportProperties(this.session, this.router.activeProgram),
+    });
+  }
+
   setSkillId(skillId: string | null): void {
     this.sessions.setSkillId(skillId);
   }
@@ -744,6 +752,12 @@ export class WizardStore implements TuiView {
   /** Dismiss the manual OAuth code overlay without submitting. */
   dismissManualAuthCode(): void {
     this.popOverlay();
+  }
+
+  /** Close the paste-code overlay if it is open, because the login settled without it. */
+  closeManualAuthCode(): void {
+    this._resolveManualAuthCode = null;
+    if (this.router.activeScreen === Overlay.ManualAuthCode) this.popOverlay();
   }
 
   /**

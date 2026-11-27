@@ -14,6 +14,7 @@ import axios from 'axios';
 import * as net from 'node:net';
 import { abortOnScreens } from '@tui/abort';
 import type { WizardStore } from '@tui/store';
+import { analytics } from '@utils/analytics';
 import { openTrackedLink } from '@utils/links';
 import { performOAuthFlow } from '../oauth';
 
@@ -36,6 +37,7 @@ function fakeStore() {
       store.loginUrl = url;
     },
     setAuthorizeUrl: vi.fn(),
+    closeManualAuthCode: vi.fn(),
     pushStatus: vi.fn(),
     showSessionTimeout: vi.fn(),
     waitForManualAuthCode: () => pasted,
@@ -79,6 +81,8 @@ describe('the OAuth flow', () => {
     });
     // A remote shell cannot reach localhost, so the paste modal links PostHog directly.
     expect(store.setAuthorizeUrl).toHaveBeenNthCalledWith(1, authorize);
+    // A paste modal left open would cover the screens after login.
+    expect(store.closeManualAuthCode).toHaveBeenCalled();
     expect(abortOnScreens).not.toHaveBeenCalled();
   });
 
@@ -93,24 +97,47 @@ describe('the OAuth flow', () => {
     expect(abortOnScreens).not.toHaveBeenCalled();
   });
 
-  it('stops the login and frees its port when the callback carries an error', async () => {
-    const { store, wizardStore } = fakeStore();
+  it.each([
+    [
+      'access_denied',
+      'Authorization was cancelled',
+      'PHW_AUTH_ACCESS_DENIED',
+      'cancelled',
+    ],
+    ['invalid_scope', 'invalid_scope', 'PHW_AUTH_LOGIN_FAILED', 'error'],
+  ])(
+    'stops the login when the callback carries %s, says why, and frees its port',
+    async (oauthError, shown, code, status) => {
+      const { store, wizardStore } = fakeStore();
 
-    const flow = performOAuthFlow({ scopes: ['user:read'] }, wizardStore);
-    // Attached before the callback, because the flow rejects while the fetch is still in flight.
-    const failed = expect(flow).rejects.toThrow('aborted');
-    const loginUrl = await shownLoginUrl(store);
-    await fetch(new URL('/callback?error=access_denied', loginUrl));
+      const flow = performOAuthFlow({ scopes: ['user:read'] }, wizardStore);
+      // Attached before the callback, because the flow rejects while the fetch is still in flight.
+      const failed = expect(flow).rejects.toThrow('aborted');
+      const loginUrl = await shownLoginUrl(store);
+      await fetch(new URL(`/callback?error=${oauthError}`, loginUrl));
 
-    await failed;
-    expect(abortOnScreens).toHaveBeenCalledWith(wizardStore);
-    expect(axios.post).not.toHaveBeenCalled();
-    // The next login listens on the same port, so the failed one must have released it.
-    const reuse = net.createServer();
-    await new Promise<void>((resolve, reject) => {
-      reuse.once('error', reject);
-      reuse.listen(Number(new URL(loginUrl).port), resolve);
-    });
-    reuse.close();
-  });
+      await failed;
+      // The outro is the only screen left, so the reason must reach it.
+      expect(abortOnScreens).toHaveBeenCalledWith(wizardStore, {
+        message: expect.stringContaining(shown),
+        code,
+        status,
+        error: expect.objectContaining({
+          context: expect.objectContaining({
+            $exception_fingerprint: `wizard_oauth_${oauthError}`,
+          }),
+        }),
+      });
+      // abortOnScreens captures the error; a second capture here would count it twice.
+      expect(analytics.captureException).not.toHaveBeenCalled();
+      expect(axios.post).not.toHaveBeenCalled();
+      // The next login listens on the same port, so the failed one must have released it.
+      const reuse = net.createServer();
+      await new Promise<void>((resolve, reject) => {
+        reuse.once('error', reject);
+        reuse.listen(Number(new URL(loginUrl).port), resolve);
+      });
+      reuse.close();
+    },
+  );
 });

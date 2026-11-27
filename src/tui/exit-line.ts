@@ -16,7 +16,7 @@
 import { type WizardStore } from './store.js';
 import { totalTokenCount } from '@tui/token-usage';
 import { OutroKind } from '@shared/outro';
-import { isRunFailure, MINT_FAILURE_CONTACT } from '@tui/mint-failure';
+import { failureCopy, isRunFailure } from '@tui/mint-failure';
 import { formatTokenCount, formatCostUsd } from '@shared/token-pricing';
 import { getLogFilePath } from '@utils/debug';
 import { readFileHead } from '@utils/bounded-fs';
@@ -106,7 +106,7 @@ function needsAttentionBlock(store: WizardStore): string | null {
 
 export function getExitLine(store: WizardStore): string {
   // A failed run prints its own unavailable notice; the report's warnings don't apply.
-  const attention = isRunFailure(store.session)
+  const attention = isRunFailure(store.session, store.router.activeProgram)
     ? null
     : needsAttentionBlock(store);
   const body = exitSummary(store);
@@ -119,13 +119,22 @@ function exitSummary(store: WizardStore): string {
   const costLine = tokenCostLine(store);
   const loginBlock = mcpLoginBlock(store);
 
-  if (isRunFailure(store.session)) {
+  if (isRunFailure(store.session, store.router.activeProgram)) {
     const spellbook = store.spellbook;
+    const { headline, cause, asksAboutLog } = failureCopy(
+      store.session,
+      store.router.activeProgram,
+    );
     return [
-      'The wizard is unavailable. Setup has not been completed.',
+      `${headline}. ${cause}`,
       spellbook &&
         `${DIM}Point your agent at this skill (triple-click to select):${RESET_ATTRS}\n${spellbook.path}`,
-      `${DIM}${MINT_FAILURE_CONTACT}${RESET_ATTRS}\n${getLogFilePath()}`,
+      [
+        asksAboutLog && 'We got the error automatically.',
+        `${DIM}Wizard log:${RESET_ATTRS} ${getLogFilePath()}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
       loginBlock,
       costLine,
     ]

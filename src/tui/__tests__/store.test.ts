@@ -542,6 +542,27 @@ describe('WizardStore', () => {
 
   // ── wizard_ask overlay ───────────────────────────────────────────
 
+  describe('closeManualAuthCode', () => {
+    it('closes the paste-code overlay once the login settles', () => {
+      const store = createStore();
+      store.showManualAuthCode();
+
+      store.closeManualAuthCode();
+
+      expect(store.currentScreen).not.toBe(Overlay.ManualAuthCode);
+    });
+
+    it('leaves an overlay opened after it, such as the session timeout', () => {
+      const store = createStore();
+      store.showManualAuthCode();
+      store.showSessionTimeout();
+
+      store.closeManualAuthCode();
+
+      expect(store.currentScreen).toBe(Overlay.SessionTimeout);
+    });
+  });
+
   describe('requestQuestion / resolvePendingQuestion', () => {
     const pending = {
       id: 'req-1',

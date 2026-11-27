@@ -14,6 +14,7 @@ import {
   OAUTH_TIMEOUT_MS,
   WIZARD_USER_AGENT,
 } from '@shared/constants';
+import { ErrorCodes, WizardError } from '@shared/errors';
 import { abortOnScreens } from '@tui/abort';
 import type { WizardStore } from '@tui/store';
 import { analytics } from '@utils/analytics';
@@ -539,7 +540,7 @@ export async function performOAuthFlow(
               OAUTH_TIMEOUT_MS,
             ),
           ),
-        ]);
+        ]).finally(() => store.closeManualAuthCode());
 
         const token = await exchangeCodeForToken(
           code,
@@ -577,29 +578,28 @@ export async function performOAuthFlow(
           ? flowError.code === 'access_denied'
           : error.message.includes('access_denied');
 
+        // The outro shows this, because the status line is gone once the run aborts.
+        let failureMessage: string | undefined;
         if (timedOut) {
           // Overlay bypasses the auth-step gating (which never completes
           // without credentials), so the user sees the failure instead of a
           // spinner that never stops; any key exits.
           store.showSessionTimeout();
         } else if (accessDenied) {
-          store.pushStatus(
-            `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`,
-          );
+          failureMessage = `Authorization was cancelled.\n\nYou denied access to PostHog. To use the wizard, you need to authorize access to your PostHog account.\n\nYou can try again by re-running the wizard.`;
         } else {
-          store.pushStatus(
-            buildOAuthFailureMessage({
-              error,
-              requestedScopes: config.scopes,
-              clientId,
-              oauthUrl,
-              // Same condition that selects the dev client ID: a resolvable
-              // base URL means a dev-seeded stack, where "fix your local
-              // OAuth app" beats pointing at the production runbook.
-              isDevStack: resolveBaseUrl(config.baseUrl) !== undefined,
-            }),
-          );
+          failureMessage = buildOAuthFailureMessage({
+            error,
+            requestedScopes: config.scopes,
+            clientId,
+            oauthUrl,
+            // Same condition that selects the dev client ID: a resolvable
+            // base URL means a dev-seeded stack, where "fix your local
+            // OAuth app" beats pointing at the production runbook.
+            isDevStack: resolveBaseUrl(config.baseUrl) !== undefined,
+          });
         }
+        if (failureMessage) store.pushStatus(failureMessage);
 
         const oauthErrorCode = flowError
           ? flowError.code
@@ -609,7 +609,7 @@ export async function performOAuthFlow(
           ? 'timeout'
           : 'unknown';
 
-        analytics.captureException(error, {
+        const captureContext = {
           step: 'oauth_flow',
           oauth_error_code: oauthErrorCode,
           oauth_error_description: flowError?.description,
@@ -618,9 +618,23 @@ export async function performOAuthFlow(
           // Collapse OAuth callback failures of the same kind into one issue
           // instead of fragmenting by each user's install path in the stack trace.
           $exception_fingerprint: `wizard_oauth_${oauthErrorCode}`,
-        });
+        };
 
-        await abortOnScreens(store);
+        if (!failureMessage) {
+          analytics.captureException(error, captureContext);
+          await abortOnScreens(store);
+          throw error;
+        }
+        const code = accessDenied
+          ? ErrorCodes.AuthAccessDenied
+          : ErrorCodes.AuthLoginFailed;
+        // wizardAbort captures this once; a separate capture here would count the failure twice.
+        await abortOnScreens(store, {
+          message: failureMessage,
+          code,
+          status: accessDenied ? 'cancelled' : 'error',
+          error: new WizardError(error.message, captureContext, code),
+        });
         throw error;
       }
     }

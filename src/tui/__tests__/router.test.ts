@@ -48,16 +48,53 @@ describe('WizardRouter', () => {
     },
   );
 
-  it.each([...PROGRAM_REGISTRY, ...TOOL_REGISTRY].map((program) => program.id))(
-    'shows a failed run over every step and overlay in %s',
+  it.each(PROGRAM_REGISTRY.map((program) => program.id))(
+    'shows a failed run over every step in %s',
     (program) => {
       const router = new WizardRouter(program);
-      router.pushOverlay(Overlay.WizardAsk);
       const view = failedRunView();
       view.outroDismissed = true;
       expect(router.resolve(view)).toBe(ScreenId.MintFailure);
     },
   );
+
+  it.each(TOOL_REGISTRY.map((tool) => tool.id))(
+    'keeps a logged-in failure in %s on its own outro, so Exit ends the tool',
+    (tool) => {
+      const router = new WizardRouter(tool);
+      const view = failedRunView();
+      view.session.runPhase = RunPhase.Error;
+      expect(router.resolve(view)).toBe(ScreenId.Outro);
+      view.outroDismissed = true;
+      expect(router.resolve(view)).toBe(ScreenId.Exit);
+    },
+  );
+
+  it('shows the auth error overlay over a failed run', () => {
+    const router = new WizardRouter(Program.PostHogIntegration);
+    router.pushOverlay(Overlay.AuthError);
+    const view = failedRunView();
+    view.session.outroData = {
+      kind: OutroKind.Error,
+      message: 'settings conflict',
+      errorCode: ErrorCodes.AuthSettingsConflict,
+    };
+    expect(router.resolve(view)).toBe(Overlay.AuthError);
+  });
+
+  it.each([
+    ErrorCodes.AuthSettingsConflict,
+    ErrorCodes.AuthInvalidOrExpired,
+    ErrorCodes.AuthMissingScope,
+    ErrorCodes.DetectNoPosthogSdk,
+    ErrorCodes.CliInteractiveRequired,
+  ])('keeps a logged-in %s on its own outro', (errorCode) => {
+    const router = new WizardRouter(Program.Audit);
+    const view = failedRunView();
+    view.session.runPhase = RunPhase.Error;
+    view.session.outroData = { kind: OutroKind.Error, message: 'x', errorCode };
+    expect(router.resolve(view)).toBe(ScreenId.Outro);
+  });
 
   it('shows a security stop on its own outro, never the busy handoff', () => {
     const router = new WizardRouter(Program.PostHogIntegration);
