@@ -4,7 +4,7 @@ import {
   isFullyCancelled,
 } from '@agent/wizard-ask-bridge';
 import { analytics } from '@utils/analytics';
-import type { AskAnswers, PendingQuestion } from '@agent/types';
+import type { AskAnswers, AskQuestion, PendingQuestion } from '@agent/types';
 
 vi.mock('@utils/analytics', () => ({
   analytics: {
@@ -248,6 +248,89 @@ describe('createWizardAskBridge', () => {
         }),
       );
     });
+
+    const connectOptions = [
+      { label: 'I connected Postgres', value: 'connected' },
+      { label: 'Skip Postgres', value: 'skip' },
+      { label: 'Use a different database', value: 'switch' },
+    ];
+
+    it.each<[string, AskQuestion[], AskAnswers, string | undefined]>([
+      [
+        'a connected pick',
+        [{ id: 'q', prompt: 'P', kind: 'single', options: connectOptions }],
+        { q: 'connected' },
+        'connected',
+      ],
+      [
+        'a skip pick',
+        [{ id: 'q', prompt: 'P', kind: 'single', options: connectOptions }],
+        { q: 'skip' },
+        'skip',
+      ],
+      [
+        'a skip pick whose value is an index',
+        [
+          {
+            id: 'q',
+            prompt: 'P',
+            kind: 'single',
+            options: [
+              { label: 'I connected Stripe', value: '1' },
+              { label: 'Skip Stripe', value: '2' },
+            ],
+          },
+        ],
+        { q: '2' },
+        'skip',
+      ],
+      [
+        'any other option',
+        [{ id: 'q', prompt: 'P', kind: 'single', options: connectOptions }],
+        { q: 'switch' },
+        'other',
+      ],
+      [
+        'an answer that matches no option',
+        [{ id: 'q', prompt: 'P', kind: 'single', options: connectOptions }],
+        { q: 'my password is hunter2' },
+        'other',
+      ],
+      [
+        'a text question',
+        [{ id: 'q', prompt: 'P', kind: 'text' }],
+        { q: 'skip' },
+        undefined,
+      ],
+      [
+        'a multi-question ask',
+        [
+          { id: 'q', prompt: 'P', kind: 'single', options: connectOptions },
+          { id: 'r', prompt: 'R', kind: 'text' },
+        ],
+        { q: 'connected', r: 'x' },
+        undefined,
+      ],
+    ])(
+      'records %s on `wizard_ask answered` as an intent, never the answer',
+      async (_name, questions, answers, expected) => {
+        const bridge = createWizardAskBridge({
+          getSource: () => 'integration-v2-warehouse',
+          showQuestion: () => Promise.resolve(answers),
+        });
+
+        await bridge.request({ questions, subject: 'postgres' });
+
+        const answered = wizardCaptureMock.mock.calls.find(
+          ([name]) => name === 'wizard_ask answered',
+        );
+        expect(answered?.[1]).toMatchObject({
+          subject: 'postgres',
+          choice: expected,
+        });
+        expect(JSON.stringify(answered?.[1])).not.toContain('hunter2');
+      },
+    );
 
     it('emits `wizard_ask cancelled` when every field comes back as the cancelled sentinel', async () => {
       const bridge = createWizardAskBridge({
