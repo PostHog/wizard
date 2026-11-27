@@ -1,5 +1,6 @@
 import { piBackend } from '..';
 import { runPiTask } from '../task';
+import { getActivePiSessions, STREAM_STALL_EVENT } from '../stream-stall';
 import { AgentSignals, REMARK_INSTRUCTION } from '@agent/signals';
 import { analytics } from '@utils/analytics';
 import { createSecurityExtension } from '../security';
@@ -47,6 +48,10 @@ const state = vi.hoisted(() => ({
   toolResult: undefined as string | undefined,
   // A second turn in the same prompt: complete_task runs, then the agent replies.
   report: undefined as { settle: () => void; reply: string } | undefined,
+  // Assistant message_end error string (for stream-stall runner wiring tests).
+  messageError: undefined as string | undefined,
+  // Reject prompt() with a transport error before message_end.
+  promptError: undefined as string | undefined,
 }));
 vi.mock('@utils/analytics', () => ({
   analytics: { wizardCapture: vi.fn(), capture: vi.fn() },
@@ -164,6 +169,22 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
         prompt: (prompt: string) => {
           state.prompts.push(prompt);
           state.onPrompt?.(state.prompts);
+          if (state.promptError) {
+            return Promise.reject(new Error(state.promptError));
+          }
+          if (state.messageError) {
+            state.listener?.({ type: 'turn_start' });
+            state.listener?.({
+              type: 'message_end',
+              message: {
+                role: 'assistant',
+                stopReason: 'error',
+                errorMessage: state.messageError,
+                content: [],
+              },
+            });
+            return Promise.resolve();
+          }
           if (!state.noTools)
             state.listener?.({
               type: 'tool_execution_start',
@@ -329,6 +350,8 @@ beforeEach(() => {
   state.toolResult = undefined;
   state.remark = undefined;
   state.report = undefined;
+  state.messageError = undefined;
+  state.promptError = undefined;
   vi.mocked(analytics.wizardCapture).mockClear();
 });
 
@@ -858,4 +881,90 @@ it('forwards config.run.detectPackageManager into createWizardPiTools on orchest
   expect(createWizardPiTools).toHaveBeenCalledWith(
     expect.objectContaining({ detectPackageManager: customDetector }),
   );
+});
+
+describe('stream stall telemetry wiring', () => {
+  it('captures mid-stream stall events in piBackend.run and cleans up active sessions', async () => {
+    state.messageError = 'request deadline exceeded mid-stream';
+
+    await piBackend.run(runInputs(vi.fn(), null));
+
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      STREAM_STALL_EVENT,
+      expect.objectContaining({
+        stage: 'failed',
+        harness: 'pi',
+        sequence: Sequence.linear,
+        model: GPT5_6_LUNA_MODEL,
+        effort: 'low',
+        api: 'openai-responses',
+        error_kind: 'deadline_exceeded',
+        error_message: 'request deadline exceeded mid-stream',
+      }),
+    );
+    expect(getActivePiSessions()).toBe(0);
+  });
+
+  it('captures mid-stream stall events in runPiTask with task analyticsProperties', async () => {
+    state.messageError = 'upstream closed the stream';
+
+    await runPiTask({
+      ...runInputs(vi.fn(), null),
+      orchestrator: {
+        currentTaskId: 'logs',
+        validTypes: ['logs'],
+        store: { get: () => ({ status: 'running' }) },
+      } as never,
+      spinnerMessage: '',
+      successMessage: '',
+      requestRemark: false,
+      allowedTools: ['Read'],
+      analyticsProperties: { task_type: 'logs', task_id: 'task-7' },
+    });
+
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      STREAM_STALL_EVENT,
+      expect.objectContaining({
+        stage: 'failed',
+        harness: 'pi',
+        sequence: Sequence.orchestrator,
+        model: GPT5_6_LUNA_MODEL,
+        task_type: 'logs',
+        task_id: 'task-7',
+        error_kind: 'upstream_closed',
+      }),
+    );
+    expect(getActivePiSessions()).toBe(0);
+  });
+
+  it('captures thrown transport errors in runPiTask via noteTransportError', async () => {
+    state.promptError = 'read ECONNRESET';
+
+    await runPiTask({
+      ...runInputs(vi.fn(), null),
+      orchestrator: {
+        currentTaskId: 'logs',
+        validTypes: ['logs'],
+        store: { get: () => ({ status: 'running' }) },
+      } as never,
+      spinnerMessage: '',
+      successMessage: '',
+      requestRemark: false,
+      allowedTools: ['Read'],
+      analyticsProperties: { task_type: 'logs', task_id: 'task-8' },
+    });
+
+    expect(analytics.wizardCapture).toHaveBeenCalledWith(
+      STREAM_STALL_EVENT,
+      expect.objectContaining({
+        stage: 'failed',
+        harness: 'pi',
+        sequence: Sequence.orchestrator,
+        task_type: 'logs',
+        task_id: 'task-8',
+        error_kind: 'connection_reset',
+      }),
+    );
+    expect(getActivePiSessions()).toBe(0);
+  });
 });

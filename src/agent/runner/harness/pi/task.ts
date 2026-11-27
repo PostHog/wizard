@@ -45,6 +45,7 @@ import {
   withGatewayRemint,
   createGatewayRuntime,
 } from './gateway';
+import { createStreamStallWatcher } from './stream-stall';
 import { runErrorType, setupSignalFailure } from './completion';
 import { bindPiCancellation } from './cancellation';
 import type { SecurityState } from './security';
@@ -244,6 +245,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
   let mcpCleanup: (() => void) | undefined;
   let aioFailed = true;
   let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
+  let streamStall: ReturnType<typeof createStreamStallWatcher> | undefined;
   let securityState: SecurityState | undefined;
   let abortReason: string | undefined;
   let remarkTurn = false;
@@ -290,7 +292,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
       // back to the model table.
       effort,
     });
-    const { provider, caps } = buildGatewayProvider(providerInputs(auth));
+    const { provider, caps, api } = buildGatewayProvider(providerInputs(auth));
     const registry = await createGatewayRuntime(provider);
     const model = registry.getModel(GATEWAY_PROVIDER, modelId);
     if (!model) {
@@ -481,10 +483,19 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     logToFile(`[pi-task] tools passed to model: ${toolNames.join(', ')}`);
     const taskPrompt = `${prompt}\n\n${renderToolInventory(toolNames)}`;
 
+    streamStall = createStreamStallWatcher({
+      sequence: Sequence.orchestrator,
+      model: modelId,
+      effort: caps.thinkingLevel,
+      api,
+      tag: 'pi-task',
+      analyticsProperties,
+    });
     const unsubscribe = agentSession.subscribe((event) => {
       // Mirror the turn into AIO. No-op when --capture-aio is off. Runs
       // before the role guard so the module's own filter is authoritative.
       capture.captureFromPiMessageEndEvent(event);
+      streamStall?.onEvent(event);
 
       switch (event.type) {
         case 'message_end': {
@@ -717,6 +728,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     }
     const message = err instanceof Error ? err.message : String(err);
     logToFile(`[pi-task] run error: ${message}`);
+    streamStall?.noteTransportError(message);
     if (errorMessage || spinnerMessage) {
       spinner.stop(errorMessage ?? 'Task failed');
     }
@@ -738,6 +750,7 @@ export async function runPiTask(inputs: TaskRunInputs): Promise<AgentResult> {
     };
   } finally {
     await cancellation?.settle();
+    streamStall?.dispose({ cancelled: Boolean(inputs.signal?.aborted) });
     try {
       mcpCleanup?.();
     } catch {

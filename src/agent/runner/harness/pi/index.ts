@@ -38,6 +38,7 @@ import {
   withGatewayRemint,
   createGatewayRuntime,
 } from './gateway';
+import { createStreamStallWatcher } from './stream-stall';
 import { createAioCapture } from '../../../aio-capture';
 import type {
   AgentResult,
@@ -357,6 +358,7 @@ export const piBackend: AgentHarness = {
     let mcpCleanup: (() => void) | undefined;
     let aioFailed = true;
     let cancellation: ReturnType<typeof bindPiCancellation> | undefined;
+    let streamStall: ReturnType<typeof createStreamStallWatcher> | undefined;
     let timedOut = false;
     let timeoutAbort: Promise<void> | undefined;
     let abortReason: string | undefined;
@@ -679,6 +681,13 @@ export const piBackend: AgentHarness = {
         },
       });
 
+      streamStall = createStreamStallWatcher({
+        sequence: Sequence.linear,
+        model: modelId,
+        effort: caps.thinkingLevel,
+        api,
+        tag: 'pi',
+      });
       // Map pi events onto the run spinner + the log file, mirroring the
       // anthropic path's log shape (assistant turns + tool I/O) and driving the
       // single run spinner with one stable status at a time (no overlap).
@@ -687,6 +696,7 @@ export const piBackend: AgentHarness = {
         // before the role guard so the module's own filter (assistant-only)
         // stays the single source of truth for what's captured.
         capture.captureFromPiMessageEndEvent(event);
+        streamStall?.onEvent(event);
 
         switch (event.type) {
           case 'message_end': {
@@ -995,6 +1005,7 @@ export const piBackend: AgentHarness = {
       if (timedOut && structured) return timedOutResult(structured.timeoutMs);
       const message = err instanceof Error ? err.message : String(err);
       logToFile(`[pi] run error: ${message}`);
+      streamStall?.noteTransportError(message);
       spinner.stop(config.errorMessage ?? `${config.integrationLabel} failed`);
       log.error(`pi backend error: ${message}`);
       const coded = classifyRunFailure(err);
@@ -1016,6 +1027,9 @@ export const piBackend: AgentHarness = {
     } finally {
       await cancellation?.settle();
       await timeoutAbort;
+      streamStall?.dispose({
+        cancelled: Boolean(inputs.signal?.aborted || timedOut),
+      });
       try {
         mcpCleanup?.();
       } catch {
