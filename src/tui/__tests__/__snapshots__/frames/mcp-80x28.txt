@@ -2,9 +2,11 @@
 
  Cost (running): $0.00 · no agent turns yet                      Ctrl+T to hide
 
- Adding the PostHog MCP to your coding agents
+ Add the PostHog MCP to your coding agents?
 
- Found 2 coding agents. Setting each one up on this computer.
+ Found 2 coding agents: Claude Code, Cursor.
+ Adding it writes a posthog server to each agent's own config, outside this
+ project.
 
-   ⠋ Claude Code   plugin + MCP    Installing…
-   · Cursor        MCP             Waiting
+ ▸ Add the PostHog MCP
+   Skip

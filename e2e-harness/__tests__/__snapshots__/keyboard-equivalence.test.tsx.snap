@@ -77,6 +77,21 @@ exports[`keyboard commit vs control action commit > mcp: enter on install result
 }
 `;
 
+exports[`keyboard commit vs control action commit > mcp: esc on the install question vs set_mcp_outcome skipped 1`] = `
+{
+  "action": {
+    "mcpComplete": true,
+    "mcpOutcome": "skipped",
+    "screen": "exit",
+  },
+  "keyboard": {
+    "mcpComplete": true,
+    "mcpOutcome": "skipped",
+    "screen": "exit",
+  },
+}
+`;
+
 exports[`keyboard commit vs control action commit > outro: any key vs dismiss_outro 1`] = `
 {
   "action": {
