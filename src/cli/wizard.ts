@@ -17,6 +17,7 @@ import { configureLogFile } from '@utils/debug';
 import { toCommandModule, type Command } from './commands/command';
 import { ErrorCodes } from '@shared/errors';
 import { emitWizardError } from '@shared/errors';
+import { VERSION } from '@shared/version';
 
 /**
  * Global yargs options applied to every command. These are read from the
@@ -257,7 +258,8 @@ export class Wizard {
       })
       .help()
       .alias('help', 'h')
-      .version()
+      // Under npx, yargs would read npx's own package.json, which has no version.
+      .version(VERSION)
       .alias('version', 'v');
   }
 
